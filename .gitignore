@@ -1,0 +1,13 @@
+# Python
+text_lloom/.venv/
+*.egg-info/
+__pycache__/
+
+# Environment
+.env
+
+# Generated LLooM frontend assets
+text_lloom/src/text_lloom/static/
+
+# Node
+node_modules/

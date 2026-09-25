@@ -21,10 +21,10 @@ else:
   # from `npm run build`
   # Path to static from text_lloom/src/text_lloom (the python package)
   bundled_assets_dir = pathlib.Path(__file__).parent / "static"
-  ESM = (bundled_assets_dir / "index.js").read_text()
-  CSS = (bundled_assets_dir / "index.css").read_text()
-  ESM_select = (bundled_assets_dir / "index_select.js").read_text()
-  CSS_select = (bundled_assets_dir / "index_select.css").read_text()
+  ESM = (bundled_assets_dir / "index.js").read_text(encoding="utf-8")
+  CSS = (bundled_assets_dir / "index.css").read_text(encoding="utf-8")
+  ESM_select = (bundled_assets_dir / "index_select.js").read_text(encoding="utf-8")
+  CSS_select = (bundled_assets_dir / "index_select.css").read_text(encoding="utf-8")
   
 
 """

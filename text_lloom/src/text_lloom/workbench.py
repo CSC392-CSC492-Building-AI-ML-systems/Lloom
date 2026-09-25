@@ -11,6 +11,8 @@ from yaspin import yaspin
 import base64
 import requests
 
+from IPython.display import display
+
 import nltk
 nltk.download('punkt_tab', quiet=True)
 
