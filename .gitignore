@@ -11,3 +11,6 @@ text_lloom/src/text_lloom/static/
 
 # Node
 node_modules/
+
+*.DS_Store
+CLAUDE.md
