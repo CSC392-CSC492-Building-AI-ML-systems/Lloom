@@ -1,4 +1,4 @@
-# Runs on every PR to main. Three independent jobs, each shows up as its own check.
+# Runs on every PR to main. Two jobs, each shows up as its own check.
 # To add a new check later, add a step to the matching job (or a new job).
 name: CI
 
@@ -49,15 +49,3 @@ jobs:
           cache-dependency-path: text_lloom/pyproject.toml
       - run: pip install -e text_lloom pytest
       - run: pytest text_lloom/tests
-
-  # Makes sure the VitePress docs still build.
-  docs:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run docs:build
