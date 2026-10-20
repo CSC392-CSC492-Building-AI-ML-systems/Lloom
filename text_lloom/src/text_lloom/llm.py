@@ -7,6 +7,7 @@ This file contains utility functions for processing calls to LLMs.
 # IMPORTS ================================
 import numpy as np
 import asyncio
+from functools import partial
 
 # Local imports
 if __package__ is None or __package__ == '':
@@ -55,7 +56,10 @@ class OpenAIModel(Model):
     # Adds the following parameters for token and cost tracking:
     # - context_window: int (optional), total tokens shared between input and output
     # - cost: float (optional), cost per token (input_cost, output_cost)
-    def __init__(self, name, api_key, setup_fn=setup_llm_fn, fn=call_llm_fn, rate_limit=None, context_window=None, cost=None, **args):
+    # - base_url: str (optional), URL of an OpenAI-compatible API (ex: Gemini, Ollama)
+    def __init__(self, name, api_key, setup_fn=setup_llm_fn, fn=call_llm_fn, rate_limit=None, context_window=None, cost=None, base_url=None, **args):
+        if base_url is not None:
+            setup_fn = partial(setup_fn, base_url=base_url)
         super().__init__(name, setup_fn, fn, api_key, rate_limit, **args)
         # OpenAI-specific setup
         # TODO: add helpers to support token and cost tracking for other models
@@ -79,7 +83,10 @@ class OpenAIEmbedModel(EmbedModel):
     # OpenAIEmbedModel class for OpenAI embedding models
     # Adds the following parameters for cost tracking:
     # - cost: float (optional), cost per token (input_cost, output_cost)
-    def __init__(self, name, setup_fn=setup_embed_fn, fn=call_embed_fn, api_key=None, batch_size=2048, cost=None, **args):
+    # - base_url: str (optional), URL of an OpenAI-compatible API (ex: Gemini, Ollama)
+    def __init__(self, name, setup_fn=setup_embed_fn, fn=call_embed_fn, api_key=None, batch_size=2048, cost=None, base_url=None, **args):
+        if base_url is not None:
+            setup_fn = partial(setup_fn, base_url=base_url)
         super().__init__(name, setup_fn, fn, api_key, batch_size, **args)
         # OpenAI-specific setup
         self.count_tokens_fn = count_tokens_fn  # called in llm_openai.py call_embed_fn()

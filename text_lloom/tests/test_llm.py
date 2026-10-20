@@ -1,6 +1,8 @@
 import asyncio
 
-from text_lloom.llm import Model, multi_query_gpt_wrapper
+import pytest
+
+from text_lloom.llm import Model, OpenAIEmbedModel, OpenAIModel, multi_query_gpt_wrapper
 
 
 # A fake model: no OpenAI client, no network. `fn` is what normally calls the LLM.
@@ -30,3 +32,47 @@ def test_failed_call_returns_none_instead_of_raising():
     texts, tokens = run(fake_model(fn), [{"x": "good"}, {"x": "bad"}])
     assert texts == ("ok", None)
     assert tuple(tokens) == (1, 1)
+
+
+# base_url is passed from the model classes down to the client setup (no network calls are made)
+CUSTOM_URL = "http://localhost:9999/v1/"
+# Known model names are used on purpose: unknown names are not supported yet
+MODEL_CLASSES = [
+    (OpenAIModel, "gpt-4o-mini"),
+    (OpenAIEmbedModel, "text-embedding-3-small"),
+]
+
+
+@pytest.mark.parametrize("model_cls, name", MODEL_CLASSES)
+def test_model_client_uses_the_given_base_url(model_cls, name):
+    model = model_cls(name, api_key="k", base_url=CUSTOM_URL)
+    assert str(model.client.base_url) == CUSTOM_URL
+
+
+@pytest.mark.parametrize("model_cls, name", MODEL_CLASSES)
+def test_base_url_is_not_swallowed_into_args(model_cls, name):
+    model = model_cls(name, api_key="k", base_url=CUSTOM_URL)
+    assert "base_url" not in model.args
+
+
+@pytest.mark.parametrize("model_cls, name", MODEL_CLASSES)
+def test_model_client_defaults_to_openai(model_cls, name, monkeypatch):
+    # The openai library also reads OPENAI_BASE_URL, so clear it for a predictable default
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    model = model_cls(name, api_key="k")
+    assert "api.openai.com" in str(model.client.base_url)
+
+
+@pytest.mark.parametrize("model_cls, name", MODEL_CLASSES)
+def test_custom_setup_fn_only_receives_base_url_when_given(model_cls, name):
+    calls = []
+
+    def recording_setup_fn(*args, **kwargs):
+        calls.append((args, kwargs))
+
+    model_cls(name, api_key="k", setup_fn=recording_setup_fn)
+    model_cls(name, api_key="k", setup_fn=recording_setup_fn, base_url=CUSTOM_URL)
+    assert calls == [
+        (("k",), {}),  # old behavior: only the key
+        (("k",), {"base_url": CUSTOM_URL}),
+    ]
