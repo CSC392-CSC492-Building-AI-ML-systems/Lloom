@@ -3,19 +3,21 @@ import tiktoken
 import numpy as np
 
 # SETUP functions
-def setup_llm_fn(api_key):
+def setup_llm_fn(api_key, base_url=None):
     from openai import AsyncOpenAI
-    
+
     llm_client = AsyncOpenAI(
         api_key=api_key,
+        base_url=base_url,
     )
     return llm_client
 
-def setup_embed_fn(api_key):
+def setup_embed_fn(api_key, base_url=None):
     from openai import OpenAI
-    
+
     embed_client = OpenAI(
         api_key=api_key,
+        base_url=base_url,
     )
     return embed_client
 
