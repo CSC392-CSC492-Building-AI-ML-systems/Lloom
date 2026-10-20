@@ -50,7 +50,7 @@ def call_embed_fn(model, texts_arr):
         model=model.name,
     )
     embeddings = [r.embedding for r in resp.data]
-    tokens = np.sum(model.count_tokens_fn(model, text) for text in texts_arr)
+    tokens = sum(model.count_tokens_fn(model, text) for text in texts_arr)
     return embeddings, tokens
 
 
