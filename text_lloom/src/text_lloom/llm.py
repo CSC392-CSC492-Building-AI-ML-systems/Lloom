@@ -7,6 +7,7 @@ This file contains utility functions for processing calls to LLMs.
 # IMPORTS ================================
 import numpy as np
 import asyncio
+import math
 from functools import partial
 
 # Local imports
@@ -93,6 +94,25 @@ class OpenAIEmbedModel(EmbedModel):
         if cost is None:
             cost = get_cost(name)
         self.cost = cost
+
+
+# MODEL CONFIG HELPERS ================================
+
+# Parses a "a,b" setting into a pair of numbers, ex: "1000,0" -> (1000, 0)
+# - text: str, the raw value (ex: from an environment variable)
+# - var_name: str, name of the setting, used in error messages
+# - kind: type, int or float, the type of both numbers
+def parse_pair(text, var_name, kind=float):
+    parts = text.split(",")
+    if len(parts) != 2:
+        raise ValueError(f"{var_name} must be two comma-separated values, like 1000,0 (got {text!r}).")
+    try:
+        pair = tuple(kind(part) for part in parts)
+    except ValueError:
+        raise ValueError(f"{var_name} must be two numbers of type {kind.__name__} (got {text!r}).") from None
+    if not all(math.isfinite(value) and value >= 0 for value in pair):
+        raise ValueError(f"{var_name} must be finite and not negative (got {text!r}).")
+    return pair
 
 
 # CUSTOM LLM API WRAPPERS ================================

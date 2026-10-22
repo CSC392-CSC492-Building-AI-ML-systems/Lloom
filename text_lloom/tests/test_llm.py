@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from text_lloom.llm import Model, OpenAIEmbedModel, OpenAIModel, multi_query_gpt_wrapper
+from text_lloom.llm import Model, OpenAIEmbedModel, OpenAIModel, multi_query_gpt_wrapper, parse_pair
 
 
 # A fake model: no OpenAI client, no network. `fn` is what normally calls the LLM.
@@ -96,3 +96,29 @@ def test_unknown_model_missing_a_value_raises_even_with_a_base_url(missing, base
     del values[missing]
     with pytest.raises(Exception, match=f"`{missing}`"):
         OpenAIModel("llama3.1:8b", api_key="k", base_url=base_url, **values)
+
+
+# parse_pair turns "a,b" settings (ex: from environment variables) into a pair of numbers
+@pytest.mark.parametrize("text, kind, expected", [
+    ("0,0.5", float, (0.0, 0.5)),
+    (" 1000 , 0 ", int, (1000, 0)),  # spaces around values are fine
+])
+def test_parse_pair_reads_two_numbers(text, kind, expected):
+    assert parse_pair(text, "LLM_X", kind) == expected
+
+
+@pytest.mark.parametrize("text", ["1", "1,2,3"])
+def test_parse_pair_rejects_the_wrong_number_of_values(text):
+    with pytest.raises(ValueError, match="LLM_X must be two comma-separated values"):
+        parse_pair(text, "LLM_X")
+
+
+def test_parse_pair_rejects_a_decimal_when_whole_numbers_are_needed():
+    with pytest.raises(ValueError, match="LLM_X must be two numbers of type int"):
+        parse_pair("10.5,0", "LLM_X", int)
+
+
+@pytest.mark.parametrize("text", ["inf,0", "-5,0"])
+def test_parse_pair_rejects_numbers_that_are_not_finite_or_are_negative(text):
+    with pytest.raises(ValueError, match="LLM_X must be finite and not negative"):
+        parse_pair(text, "LLM_X")
