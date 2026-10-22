@@ -76,3 +76,23 @@ def test_custom_setup_fn_only_receives_base_url_when_given(model_cls, name):
         (("k",), {}),  # old behavior: only the key
         (("k",), {"base_url": CUSTOM_URL}),
     ]
+
+
+# Models not in our defaults (ex: local ones) need their values given explicitly: nothing is guessed
+def test_custom_model_builds_with_explicit_values():
+    model = OpenAIModel(
+        "llama3.1:8b", api_key="k", base_url=CUSTOM_URL,
+        context_window=8192, cost=(0, 0), rate_limit=(1000, 0),
+    )
+    assert model.context_window == 8192
+    assert model.cost == (0, 0)
+    assert model.rate_limit == (1000, 0)
+
+
+@pytest.mark.parametrize("base_url", [None, CUSTOM_URL])
+@pytest.mark.parametrize("missing", ["context_window", "cost", "rate_limit"])
+def test_unknown_model_missing_a_value_raises_even_with_a_base_url(missing, base_url):
+    values = {"context_window": 8192, "cost": (0, 0), "rate_limit": (1000, 0)}
+    del values[missing]
+    with pytest.raises(Exception, match=f"`{missing}`"):
+        OpenAIModel("llama3.1:8b", api_key="k", base_url=base_url, **values)
