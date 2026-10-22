@@ -114,6 +114,42 @@ def parse_pair(text, var_name, kind=float):
         raise ValueError(f"{var_name} must be finite and not negative (got {text!r}).")
     return pair
 
+# Builds the models LLooM uses from a settings dict (ex: read from environment variables),
+# all talking to one OpenAI-compatible API (ex: Gemini, Ollama).
+# Required settings:
+# - base_url, api_key: where the API is and how to log in
+# - model: name of the chat model (used to distill, synthesize and score)
+# - embed_model: name of the embedding model
+# Optional settings, needed only for models not in our defaults (they are never guessed):
+# - context_window, cost, rate_limit: for the chat model (see OpenAIModel)
+# - embed_cost: cost per token for the embedding model, (input_cost, output_cost)
+# Output: dict with keys distill_model, cluster_model, synth_model, score_model
+def build_models(config):
+    required = ["base_url", "api_key", "model", "embed_model"]
+    missing = [key for key in required if key not in config]
+    if missing:
+        raise ValueError(f"Missing model settings: {', '.join(missing)}")
+
+    chat_settings = {
+        "api_key": config["api_key"],
+        "base_url": config["base_url"],
+        "context_window": config.get("context_window"),
+        "cost": config.get("cost"),
+        "rate_limit": config.get("rate_limit"),
+    }
+    embed_model = OpenAIEmbedModel(
+        config["embed_model"],
+        api_key=config["api_key"],
+        base_url=config["base_url"],
+        cost=config.get("embed_cost"),
+    )
+    return {
+        "distill_model": OpenAIModel(config["model"], **chat_settings),
+        "cluster_model": embed_model,
+        "synth_model": OpenAIModel(config["model"], **chat_settings),
+        "score_model": OpenAIModel(config["model"], **chat_settings),
+    }
+
 
 # CUSTOM LLM API WRAPPERS ================================
 

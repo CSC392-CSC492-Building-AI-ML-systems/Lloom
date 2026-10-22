@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from text_lloom.llm import Model, OpenAIEmbedModel, OpenAIModel, multi_query_gpt_wrapper, parse_pair
+from text_lloom.llm import Model, OpenAIEmbedModel, OpenAIModel, build_models, multi_query_gpt_wrapper, parse_pair
 
 
 # A fake model: no OpenAI client, no network. `fn` is what normally calls the LLM.
@@ -122,3 +122,50 @@ def test_parse_pair_rejects_a_decimal_when_whole_numbers_are_needed():
 def test_parse_pair_rejects_numbers_that_are_not_finite_or_are_negative(text):
     with pytest.raises(ValueError, match="LLM_X must be finite and not negative"):
         parse_pair(text, "LLM_X")
+
+
+# build_models creates the models LLooM uses from a settings dict
+# (the cost values differ on purpose, so a mix-up between chat and embedding cost is visible)
+SETTINGS = {
+    "base_url": CUSTOM_URL, "api_key": "k",
+    "model": "llama3.1:8b", "embed_model": "nomic-embed-text",
+    "context_window": 8192, "cost": (0.5, 1.5), "rate_limit": (1000, 0), "embed_cost": (0.25, 0),
+}
+
+
+@pytest.mark.parametrize("role", ["distill_model", "synth_model", "score_model"])
+def test_build_models_gives_each_chat_model_the_settings(role):
+    model = build_models(SETTINGS)[role]
+    assert model.name == "llama3.1:8b"
+    assert str(model.client.base_url) == CUSTOM_URL
+    assert (model.context_window, model.cost, model.rate_limit) == (8192, (0.5, 1.5), (1000, 0))
+
+
+def test_build_models_gives_the_embedding_model_the_settings():
+    model = build_models(SETTINGS)["cluster_model"]
+    assert model.name == "nomic-embed-text"
+    assert str(model.client.base_url) == CUSTOM_URL
+    assert model.cost == (0.25, 0)
+
+
+def test_build_models_lists_all_missing_required_settings():
+    with pytest.raises(ValueError, match="Missing model settings: api_key, model, embed_model"):
+        build_models({"base_url": CUSTOM_URL})
+
+
+def test_build_models_needs_no_extra_settings_for_models_in_our_defaults():
+    settings = {
+        "base_url": CUSTOM_URL, "api_key": "k",
+        "model": "gpt-4o-mini", "embed_model": "text-embedding-3-small",
+    }
+    models = build_models(settings)
+    assert models["score_model"].context_window == 128000
+    assert models["cluster_model"].cost == (0.02 / 1_000_000, 0)
+
+
+# rate_limit stands for the chat settings (they share one code path), embed_cost is built separately
+@pytest.mark.parametrize("omitted", ["rate_limit", "embed_cost"])
+def test_build_models_never_guesses_a_missing_setting_for_an_unknown_model(omitted):
+    settings = {key: value for key, value in SETTINGS.items() if key != omitted}
+    with pytest.raises(Exception, match="not in our defaults"):
+        build_models(settings)
