@@ -57,9 +57,16 @@ def call_embed_fn(model, texts_arr):
 
 
 # TOKEN + COST functions
+def get_encoding(model_name):
+    # tiktoken only knows OpenAI model names; other models get an approximate count
+    try:
+        return tiktoken.encoding_for_model(model_name)
+    except KeyError:
+        return tiktoken.get_encoding("cl100k_base")
+
 def count_tokens_fn(model, text):
     # Fetch the number of tokens used by the provided text
-    encoding = tiktoken.encoding_for_model(model.name)
+    encoding = get_encoding(model.name)
     tokens = encoding.encode(text)
     n_tokens = len(tokens)
     return n_tokens
@@ -75,7 +82,7 @@ def cost_fn(model, tokens):
     return in_total, out_total
 
 def truncate_tokens_fn(model, text, out_token_alloc=1500):
-    encoding = tiktoken.encoding_for_model(model.name)
+    encoding = get_encoding(model.name)
     tokens = encoding.encode(text)
     n_tokens = len(tokens)
 
