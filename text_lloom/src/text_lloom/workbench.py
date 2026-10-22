@@ -21,12 +21,12 @@ if __package__ is None or __package__ == '':
     # uses current directory visibility
     from concept_induction import *
     from concept import Concept
-    from llm import Model, EmbedModel, OpenAIModel, OpenAIEmbedModel
+    from llm import Model, EmbedModel, OpenAIModel, OpenAIEmbedModel, build_models, read_env_settings
 else:
     # uses current package visibility
     from .concept_induction import *
     from .concept import Concept
-    from .llm import Model, EmbedModel, OpenAIModel, OpenAIEmbedModel
+    from .llm import Model, EmbedModel, OpenAIModel, OpenAIEmbedModel, build_models, read_env_settings
 
 # WORKBENCH class ================================
 class lloom:
@@ -42,6 +42,17 @@ class lloom:
         debug: bool = False,
     ):
         self.debug = debug  # Whether to run in debug mode
+
+        # If LLM_BASE_URL is set, models that are not specified use that OpenAI-compatible API
+        # (ex: Gemini, Ollama). The settings are read from environment variables (see read_env_settings).
+        if None in (distill_model, cluster_model, synth_model, score_model):
+            env_settings = read_env_settings(os.environ)
+            if env_settings is not None:
+                env_models = build_models(env_settings)
+                distill_model = distill_model or env_models["distill_model"]
+                cluster_model = cluster_model or env_models["cluster_model"]
+                synth_model = synth_model or env_models["synth_model"]
+                score_model = score_model or env_models["score_model"]
 
         # Add defaults if distill_model, etc. are not specified
         def get_environ_api_key():

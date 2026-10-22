@@ -150,6 +150,40 @@ def build_models(config):
         "score_model": OpenAIModel(config["model"], **chat_settings),
     }
 
+# Reads model settings from environment variables (ex: loaded from a .env file) for build_models.
+# Returns None if LLM_BASE_URL is not set, which means "use the default OpenAI models".
+# Required once LLM_BASE_URL is set: LLM_API_KEY, LLM_MODEL, LLM_EMBED_MODEL
+# Optional (needed only for models not in our defaults):
+# - LLM_CONTEXT_WINDOW: whole number, ex: 8192
+# - LLM_COST, LLM_EMBED_COST: "input_cost,output_cost" per token, ex: 0,0
+# - LLM_RATE_LIMIT: "n_requests,wait_time_secs", ex: 1000,0
+def read_env_settings(env):
+    if not env.get("LLM_BASE_URL"):
+        return None
+
+    required = {"api_key": "LLM_API_KEY", "model": "LLM_MODEL", "embed_model": "LLM_EMBED_MODEL"}
+    missing = [var for var in required.values() if not env.get(var)]
+    if missing:
+        raise ValueError(f"LLM_BASE_URL is set, so please also set: {', '.join(missing)}")
+    settings = {"base_url": env["LLM_BASE_URL"]}
+    settings.update({key: env[var] for key, var in required.items()})
+
+    if env.get("LLM_CONTEXT_WINDOW"):
+        text = env["LLM_CONTEXT_WINDOW"]
+        if not text.isdecimal() or int(text) < 1:
+            raise ValueError(f"LLM_CONTEXT_WINDOW must be a whole number of at least 1 (got {text!r}).")
+        settings["context_window"] = int(text)
+    if env.get("LLM_COST"):
+        settings["cost"] = parse_pair(env["LLM_COST"], "LLM_COST")
+    if env.get("LLM_EMBED_COST"):
+        settings["embed_cost"] = parse_pair(env["LLM_EMBED_COST"], "LLM_EMBED_COST")
+    if env.get("LLM_RATE_LIMIT"):
+        rate_limit = parse_pair(env["LLM_RATE_LIMIT"], "LLM_RATE_LIMIT", kind=int)
+        if rate_limit[0] < 1:
+            raise ValueError(f"LLM_RATE_LIMIT must allow at least 1 request (got {env['LLM_RATE_LIMIT']!r}).")
+        settings["rate_limit"] = rate_limit
+    return settings
+
 
 # CUSTOM LLM API WRAPPERS ================================
 

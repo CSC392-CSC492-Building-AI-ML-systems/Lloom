@@ -2,7 +2,9 @@ import asyncio
 
 import pytest
 
-from text_lloom.llm import Model, OpenAIEmbedModel, OpenAIModel, build_models, multi_query_gpt_wrapper, parse_pair
+from text_lloom.llm import (
+    Model, OpenAIEmbedModel, OpenAIModel, build_models, multi_query_gpt_wrapper, parse_pair, read_env_settings,
+)
 
 
 # A fake model: no OpenAI client, no network. `fn` is what normally calls the LLM.
@@ -169,3 +171,57 @@ def test_build_models_never_guesses_a_missing_setting_for_an_unknown_model(omitt
     settings = {key: value for key, value in SETTINGS.items() if key != omitted}
     with pytest.raises(Exception, match="not in our defaults"):
         build_models(settings)
+
+
+# read_env_settings turns environment variables into the settings dict for build_models
+REQUIRED_ENV = {
+    "LLM_BASE_URL": CUSTOM_URL, "LLM_API_KEY": "k",
+    "LLM_MODEL": "llama3.1:8b", "LLM_EMBED_MODEL": "nomic-embed-text",
+}
+ENV = {
+    **REQUIRED_ENV,
+    "LLM_CONTEXT_WINDOW": "8192", "LLM_COST": "0.5,1.5", "LLM_EMBED_COST": "0.25,0", "LLM_RATE_LIMIT": "1000,0",
+}
+
+
+@pytest.mark.parametrize("env", [{}, {"LLM_BASE_URL": ""}])  # not set in the shell, or a blank line in .env
+def test_read_env_settings_returns_none_without_a_base_url(env):
+    assert read_env_settings(env) is None
+
+
+def test_read_env_settings_converts_the_variables_to_settings():
+    assert read_env_settings(ENV) == {
+        "base_url": CUSTOM_URL, "api_key": "k", "model": "llama3.1:8b", "embed_model": "nomic-embed-text",
+        "context_window": 8192, "cost": (0.5, 1.5), "embed_cost": (0.25, 0), "rate_limit": (1000, 0),
+    }
+
+
+def test_read_env_settings_leaves_out_optional_settings_that_are_not_set():
+    assert set(read_env_settings(REQUIRED_ENV)) == {"base_url", "api_key", "model", "embed_model"}
+
+
+def test_read_env_settings_lists_all_missing_required_variables():
+    with pytest.raises(ValueError, match="LLM_API_KEY, LLM_MODEL, LLM_EMBED_MODEL"):
+        read_env_settings({"LLM_BASE_URL": CUSTOM_URL})
+
+
+def test_read_env_settings_never_uses_the_openai_key_instead_of_llm_api_key():
+    env = {**REQUIRED_ENV, "OPENAI_API_KEY": "sk-openai"}
+    del env["LLM_API_KEY"]
+    with pytest.raises(ValueError, match="LLM_API_KEY"):
+        read_env_settings(env)
+
+
+@pytest.mark.parametrize("value, error", [
+    ("0,0", "at least 1 request"),
+    ("10.5,1", "LLM_RATE_LIMIT must be two numbers of type int"),
+])
+def test_read_env_settings_rejects_a_rate_limit_that_cannot_work(value, error):
+    with pytest.raises(ValueError, match=error):
+        read_env_settings({**REQUIRED_ENV, "LLM_RATE_LIMIT": value})
+
+
+@pytest.mark.parametrize("value", ["8k", "0"])
+def test_read_env_settings_rejects_a_context_window_that_is_not_a_positive_whole_number(value):
+    with pytest.raises(ValueError, match="LLM_CONTEXT_WINDOW must be a whole number"):
+        read_env_settings({**REQUIRED_ENV, "LLM_CONTEXT_WINDOW": value})
