@@ -77,10 +77,11 @@
 
   --color-placeholder-surface: var(--placeholder-surface);
   --color-icon-on-completed-step: var(--icon-on-completed-step);
+  --font-sans: var(--font-roboto);
 }
 
 body {
   background: var(--page);
   color: var(--content);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-roboto), Arial, sans-serif;
 }

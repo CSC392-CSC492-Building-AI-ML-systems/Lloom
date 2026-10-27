@@ -1,4 +1,6 @@
 import Image from "next/image";
+import { CircleHelp } from "lucide-react";
+import SearchIcon from "@/components/icons/SearchIcon";
 
 export default function Header() {
     return (
@@ -9,17 +11,21 @@ export default function Header() {
                 alt="LLooM Web"
                 width={225}
                 height={44}
-                className="w-[180px] h-auto"
                 preload
             />
 
             {/* Search bar */}
             <div className="mx-8 flex h-12 w-full max-w-[644px] items-center gap-3 rounded-full bg-page px-5">
+                <SearchIcon
+                    className="shrink-0 text-content"
+                    aria-hidden="true"
+                />
+
                 <input
                     type="search"
                     placeholder="Search projects"
                     aria-label="Search projects"
-                    className="w-full bg-transparent text-base text-content outline-none placeholder:text-content-placeholder"
+                    className="min-w-0 w-full bg-transparent text-base text-content outline-none placeholder:text-content-placeholder"
                 />
             </div>
 
@@ -28,12 +34,12 @@ export default function Header() {
                 aria-label="Header actions"
                 className="flex items-center gap-8"
             >
-                <button 
-                    type="button" 
+                <button
+                    type="button"
                     aria-label="Help"
-                    className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-gray-100"
+                    className="flex h-10 w-10 items-center justify-center rounded-full text-content hover:bg-surface-subtle"
                 >
-                    ?
+                    <CircleHelp size={40} strokeWidth={2.5} />
                 </button>
 
                 <button 
