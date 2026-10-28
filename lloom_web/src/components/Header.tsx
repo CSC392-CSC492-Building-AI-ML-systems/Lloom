@@ -37,7 +37,7 @@ export default function Header() {
                 <button
                     type="button"
                     aria-label="Help"
-                    className="flex h-10 w-10 items-center justify-center rounded-full text-content hover:bg-surface-subtle"
+                    className="flex h-10 w-10 items-center justify-center rounded-full text-content transition-colors duration-150 hover:bg-gray-300"
                 >
                     <CircleHelp size={40} strokeWidth={2.5} />
                 </button>

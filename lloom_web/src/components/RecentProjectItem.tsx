@@ -21,7 +21,7 @@ export default function RecentProjectItem({
     const formattedDate = dateFormatter.format(lastOpened);
 
     return (
-        <div className="flex min-h-[80px] items-center gap-4 border-b border-outline px-5 py-3 last:border-b-0">
+        <div className="flex min-h-[80px] items-center gap-4 border-b border-outline px-5 py-3 transition-colors duration-150 hover:bg-surface-subtle last:border-b-0">
             <div
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-placeholder-surface"
                 aria-hidden="true"
