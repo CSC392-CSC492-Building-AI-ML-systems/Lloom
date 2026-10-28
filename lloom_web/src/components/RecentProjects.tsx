@@ -28,7 +28,7 @@ export default function RecentProjects() {
     return (
         <section
             aria-labelledby="recent-projects-heading"
-            className="mt-8 flex min-h-0 flex-1 flex-col"
+            className="mt-8 flex flex-1 flex-col md:min-h-0"
         >
             <h2
                 id="recent-projects-heading"
@@ -37,7 +37,7 @@ export default function RecentProjects() {
                 Recents
             </h2>
 
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-outline bg-surface">
+            <div className="flex-1 rounded-xl border border-outline bg-surface md:min-h-0 md:overflow-y-auto">
                 {mockProjects.map((project) => (
                     <RecentProjectItem
                         key={project.id}
