@@ -12,12 +12,9 @@ const dateFormatter = new Intl.DateTimeFormat("en-CA", {
 type RecentProjectItemProps = {
     name: string;
     lastOpened: Date;
-}
+};
 
-export default function RecentProjectItem({
-    name,
-    lastOpened,
-}: RecentProjectItemProps) {
+export default function RecentProjectItem({ name, lastOpened }: RecentProjectItemProps) {
     const formattedDate = dateFormatter.format(lastOpened);
 
     return (
@@ -26,21 +23,13 @@ export default function RecentProjectItem({
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-placeholder-surface"
                 aria-hidden="true"
             >
-                <FileText
-                    size={24}
-                    strokeWidth={1.5}
-                    className="text-content-secondary"
-                />
+                <FileText size={24} strokeWidth={1.5} className="text-content-secondary" />
             </div>
 
             <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <span className="truncate text-lg font-medium text-content">
-                    {name}
-                </span>
+                <span className="truncate text-lg font-medium text-content">{name}</span>
 
-                <span className="text-sm text-content-secondary">
-                    Last opened: {formattedDate}
-                </span>
+                <span className="text-sm text-content-secondary">Last opened: {formattedDate}</span>
             </div>
         </div>
     );

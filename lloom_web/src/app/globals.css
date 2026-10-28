@@ -2,86 +2,86 @@
 
 /* Light theme — based on Figma semantic colors */
 :root {
-  color-scheme: light;
+    color-scheme: light;
 
-  --page: #ECEFF1;
-  --surface: #FFFFFF;
-  --surface-subtle: #F6F8FB;
-  --info-surface: #EDF5FF;
+    --page: #eceff1;
+    --surface: #ffffff;
+    --surface-subtle: #f6f8fb;
+    --info-surface: #edf5ff;
 
-  --content: #2D2E2E;
-  --content-secondary: #66707D;
-  --content-placeholder: #828F9E;
+    --content: #2d2e2e;
+    --content-secondary: #66707d;
+    --content-placeholder: #828f9e;
 
-  --outline: #CFD6DE;
+    --outline: #cfd6de;
 
-  --primary: #428AEA;
-  --on-primary: #FFFFFF;
-  --brand-light: #9DC1F0;
+    --primary: #428aea;
+    --on-primary: #ffffff;
+    --brand-light: #9dc1f0;
 
-  --success: #219161;
-  --success-surface: #EDF7F1;
-  --danger: #C62828;
+    --success: #219161;
+    --success-surface: #edf7f1;
+    --danger: #c62828;
 
-  --placeholder-surface: #D9D9D9;
-  --icon-on-completed-step: #E3E3E3;
+    --placeholder-surface: #d9d9d9;
+    --icon-on-completed-step: #e3e3e3;
 }
 
 /* Dark theme — proposed */
 .dark {
-  color-scheme: dark;
+    color-scheme: dark;
 
-  --page: #14191F;
-  --surface: #202831;
-  --surface-subtle: #29333E;
-  --info-surface: #1C344C;
+    --page: #14191f;
+    --surface: #202831;
+    --surface-subtle: #29333e;
+    --info-surface: #1c344c;
 
-  --content: #E8EDF3;
-  --content-secondary: #AAB6C4;
-  --content-placeholder: #8998A8;
+    --content: #e8edf3;
+    --content-secondary: #aab6c4;
+    --content-placeholder: #8998a8;
 
-  --outline: #46515E;
+    --outline: #46515e;
 
-  --primary: #6BA5F5;
-  --on-primary: #101820;
-  --brand-light: #9DC1F0;
+    --primary: #6ba5f5;
+    --on-primary: #101820;
+    --brand-light: #9dc1f0;
 
-  --success: #59C994;
-  --success-surface: #173B2D;
-  --danger: #FF8585;
+    --success: #59c994;
+    --success-surface: #173b2d;
+    --danger: #ff8585;
 
-  --placeholder-surface: #394450;
-  --icon-on-completed-step: #C4CDD8;
+    --placeholder-surface: #394450;
+    --icon-on-completed-step: #c4cdd8;
 }
 
 /* Expose semantic colors to Tailwind */
 @theme inline {
-  --color-page: var(--page);
-  --color-surface: var(--surface);
-  --color-surface-subtle: var(--surface-subtle);
-  --color-info-surface: var(--info-surface);
+    --color-page: var(--page);
+    --color-surface: var(--surface);
+    --color-surface-subtle: var(--surface-subtle);
+    --color-info-surface: var(--info-surface);
 
-  --color-content: var(--content);
-  --color-content-secondary: var(--content-secondary);
-  --color-content-placeholder: var(--content-placeholder);
+    --color-content: var(--content);
+    --color-content-secondary: var(--content-secondary);
+    --color-content-placeholder: var(--content-placeholder);
 
-  --color-outline: var(--outline);
+    --color-outline: var(--outline);
 
-  --color-primary: var(--primary);
-  --color-on-primary: var(--on-primary);
-  --color-brand-light: var(--brand-light);
+    --color-primary: var(--primary);
+    --color-on-primary: var(--on-primary);
+    --color-brand-light: var(--brand-light);
 
-  --color-success: var(--success);
-  --color-success-surface: var(--success-surface);
-  --color-danger: var(--danger);
+    --color-success: var(--success);
+    --color-success-surface: var(--success-surface);
+    --color-danger: var(--danger);
 
-  --color-placeholder-surface: var(--placeholder-surface);
-  --color-icon-on-completed-step: var(--icon-on-completed-step);
-  --font-sans: var(--font-roboto);
+    --color-placeholder-surface: var(--placeholder-surface);
+    --color-icon-on-completed-step: var(--icon-on-completed-step);
+    --font-sans: var(--font-roboto);
 }
 
 body {
-  background: var(--page);
-  color: var(--content);
-  font-family: var(--font-roboto), Arial, sans-serif;
+    background: var(--page);
+    color: var(--content);
+    font-family: var(--font-roboto), Arial, sans-serif;
 }
