@@ -4,7 +4,7 @@ import SearchIcon from "@/components/icons/SearchIcon";
 
 export default function Header() {
     return (
-        <header className="flex h-[92px] items-center justify-between bg-surface px-10">
+        <header className="flex h-[92px] shrink-0 items-center justify-between bg-surface px-10">
             {/* Logo */}
             <Image
                 src="/lloom-logo.svg"
