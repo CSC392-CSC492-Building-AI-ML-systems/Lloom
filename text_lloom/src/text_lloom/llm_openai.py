@@ -3,19 +3,21 @@ import tiktoken
 import numpy as np
 
 # SETUP functions
-def setup_llm_fn(api_key):
+def setup_llm_fn(api_key, base_url=None):
     from openai import AsyncOpenAI
-    
+
     llm_client = AsyncOpenAI(
         api_key=api_key,
+        base_url=base_url,
     )
     return llm_client
 
-def setup_embed_fn(api_key):
+def setup_embed_fn(api_key, base_url=None):
     from openai import OpenAI
-    
+
     embed_client = OpenAI(
         api_key=api_key,
+        base_url=base_url,
     )
     return embed_client
 
@@ -55,9 +57,16 @@ def call_embed_fn(model, texts_arr):
 
 
 # TOKEN + COST functions
+def get_encoding(model_name):
+    # tiktoken only knows OpenAI model names; other models get an approximate count
+    try:
+        return tiktoken.encoding_for_model(model_name)
+    except KeyError:
+        return tiktoken.get_encoding("cl100k_base")
+
 def count_tokens_fn(model, text):
     # Fetch the number of tokens used by the provided text
-    encoding = tiktoken.encoding_for_model(model.name)
+    encoding = get_encoding(model.name)
     tokens = encoding.encode(text)
     n_tokens = len(tokens)
     return n_tokens
@@ -73,7 +82,7 @@ def cost_fn(model, tokens):
     return in_total, out_total
 
 def truncate_tokens_fn(model, text, out_token_alloc=1500):
-    encoding = tiktoken.encoding_for_model(model.name)
+    encoding = get_encoding(model.name)
     tokens = encoding.encode(text)
     n_tokens = len(tokens)
 
