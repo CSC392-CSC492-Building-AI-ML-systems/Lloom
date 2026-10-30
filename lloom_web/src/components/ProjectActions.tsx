@@ -1,4 +1,5 @@
 import { Plus, Folder, Upload } from "lucide-react";
+import Link from "next/link";
 
 export default function ProjectActions() {
     return (
@@ -6,13 +7,13 @@ export default function ProjectActions() {
             aria-label="Project actions"
             className="grid grid-cols-2 gap-3 md:flex md:flex-wrap md:gap-5"
         >
-            <button
-                type="button"
+            <Link
+                href="/projects/new"
                 className="col-span-2 flex h-10 w-full items-center justify-center gap-3 rounded-full bg-primary px-4 text-base font-medium text-on-primary hover:opacity-90 md:w-auto md:min-w-[200px] md:justify-start md:px-5"
             >
-                <Plus size={24} />
+                <Plus size={24} aria-hidden="true" />
                 New project
-            </button>
+            </Link>
 
             <button
                 type="button"

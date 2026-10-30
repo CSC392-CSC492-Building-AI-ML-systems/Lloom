@@ -7,7 +7,7 @@ export default function Home() {
         <div className="flex min-h-dvh flex-col md:h-dvh md:overflow-hidden">
             <Header />
 
-            <main className="flex min-h-0 flex-1 flex-col px-4 pt-6 pb-6 md:px-10 md:pt-10">
+            <main className="flex min-h-0 flex-1 flex-col px-4 py-6 md:px-10">
                 <ProjectActions />
                 <RecentProjects />
             </main>

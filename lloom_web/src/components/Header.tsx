@@ -1,12 +1,23 @@
 import Image from "next/image";
+import Link from "next/link";
 import { CircleHelp } from "lucide-react";
 import SearchIcon from "@/components/icons/SearchIcon";
 
-export default function Header() {
+type HeaderProps = {
+    showSearch?: boolean;
+};
+
+export default function Header({ showSearch = true }: HeaderProps) {
     return (
-        <header className="flex h-[72px] shrink-0 items-center justify-between gap-3 bg-surface px-4 lg:grid lg:h-[92px] lg:grid-cols-[minmax(0,1fr)_minmax(0,644px)_minmax(0,1fr)] lg:gap-4 lg:px-10">
+        <header
+            className={`flex h-[72px] shrink-0 items-center justify-between gap-3 bg-surface px-4 lg:h-[92px] lg:gap-4 lg:px-10 ${showSearch ? "lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,644px)_minmax(0,1fr)]" : ""}`}
+        >
             {/* Logo */}
-            <div className="flex min-w-0 shrink-0 items-center lg:shrink">
+            <Link
+                href="/"
+                aria-label="LLooM Web home"
+                className="flex min-w-0 shrink-0 items-center rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary lg:shrink"
+            >
                 <Image
                     src="/lloom-logo.svg"
                     alt="LLooM Web"
@@ -15,19 +26,21 @@ export default function Header() {
                     className="h-auto w-[140px] sm:w-[180px] lg:w-[225px]"
                     preload
                 />
-            </div>
+            </Link>
 
             {/* Desktop / tablet search bar */}
-            <div className="hidden h-12 min-w-0 items-center gap-3 rounded-full bg-page px-5 sm:flex">
-                <SearchIcon className="shrink-0 text-content" aria-hidden="true" />
+            {showSearch && (
+                <div className="hidden h-12 min-w-0 items-center gap-3 rounded-full bg-page px-5 sm:flex">
+                    <SearchIcon className="shrink-0 text-content" aria-hidden="true" />
 
-                <input
-                    type="search"
-                    placeholder="Search projects"
-                    aria-label="Search projects"
-                    className="min-w-0 w-full bg-transparent text-base text-content outline-none placeholder:text-content-placeholder"
-                />
-            </div>
+                    <input
+                        type="search"
+                        placeholder="Search projects"
+                        aria-label="Search projects"
+                        className="min-w-0 w-full bg-transparent text-base text-content outline-none placeholder:text-content-placeholder"
+                    />
+                </div>
+            )}
 
             {/* Header actions */}
             <nav
@@ -35,13 +48,15 @@ export default function Header() {
                 className="flex shrink-0 items-center justify-end gap-3 lg:gap-8"
             >
                 {/* Mobile search button */}
-                <button
-                    type="button"
-                    aria-label="Search projects"
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-page text-content transition-colors duration-150 hover:bg-gray-300 sm:hidden"
-                >
-                    <SearchIcon className="h-7 w-7" aria-hidden="true" />
-                </button>
+                {showSearch && (
+                    <button
+                        type="button"
+                        aria-label="Search projects"
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-page text-content transition-colors duration-150 hover:bg-gray-300 sm:hidden"
+                    >
+                        <SearchIcon className="h-7 w-7" aria-hidden="true" />
+                    </button>
+                )}
 
                 {/* Help */}
                 <button
