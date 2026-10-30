@@ -1,26 +1,87 @@
 @import "tailwindcss";
 
+/* Light theme — based on Figma semantic colors */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+    color-scheme: light;
+
+    --page: #eceff1;
+    --surface: #ffffff;
+    --surface-subtle: #f6f8fb;
+    --info-surface: #edf5ff;
+
+    --content: #2d2e2e;
+    --content-secondary: #66707d;
+    --content-placeholder: #828f9e;
+
+    --outline: #cfd6de;
+
+    --primary: #428aea;
+    --on-primary: #ffffff;
+    --brand-light: #9dc1f0;
+
+    --success: #219161;
+    --success-surface: #edf7f1;
+    --danger: #c62828;
+
+    --placeholder-surface: #d9d9d9;
+    --icon-on-completed-step: #e3e3e3;
 }
 
+/* Dark theme — proposed */
+.dark {
+    color-scheme: dark;
+
+    --page: #14191f;
+    --surface: #202831;
+    --surface-subtle: #29333e;
+    --info-surface: #1c344c;
+
+    --content: #e8edf3;
+    --content-secondary: #aab6c4;
+    --content-placeholder: #8998a8;
+
+    --outline: #46515e;
+
+    --primary: #6ba5f5;
+    --on-primary: #101820;
+    --brand-light: #9dc1f0;
+
+    --success: #59c994;
+    --success-surface: #173b2d;
+    --danger: #ff8585;
+
+    --placeholder-surface: #394450;
+    --icon-on-completed-step: #c4cdd8;
+}
+
+/* Expose semantic colors to Tailwind */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+    --color-page: var(--page);
+    --color-surface: var(--surface);
+    --color-surface-subtle: var(--surface-subtle);
+    --color-info-surface: var(--info-surface);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+    --color-content: var(--content);
+    --color-content-secondary: var(--content-secondary);
+    --color-content-placeholder: var(--content-placeholder);
+
+    --color-outline: var(--outline);
+
+    --color-primary: var(--primary);
+    --color-on-primary: var(--on-primary);
+    --color-brand-light: var(--brand-light);
+
+    --color-success: var(--success);
+    --color-success-surface: var(--success-surface);
+    --color-danger: var(--danger);
+
+    --color-placeholder-surface: var(--placeholder-surface);
+    --color-icon-on-completed-step: var(--icon-on-completed-step);
+    --font-sans: var(--font-roboto);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+    background: var(--page);
+    color: var(--content);
+    font-family: var(--font-roboto), Arial, sans-serif;
 }
