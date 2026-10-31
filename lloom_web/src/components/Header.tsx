@@ -10,7 +10,7 @@ type HeaderProps = {
 export default function Header({ showSearch = true }: HeaderProps) {
     return (
         <header
-            className={`flex h-[72px] shrink-0 items-center justify-between gap-3 bg-surface px-4 lg:h-[92px] lg:gap-4 lg:px-10 ${showSearch ? "lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,644px)_minmax(0,1fr)]" : ""}`}
+            className={`sticky top-0 z-50 flex h-[72px] shrink-0 items-center justify-between gap-3 bg-surface px-4 lg:h-[92px] lg:gap-4 lg:px-10 ${showSearch ? "lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,644px)_minmax(0,1fr)]" : ""}`}
         >
             {/* Logo */}
             <Link
