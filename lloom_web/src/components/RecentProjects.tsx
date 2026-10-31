@@ -30,12 +30,12 @@ export default function RecentProjects() {
             aria-labelledby="recent-projects-heading"
             className="mt-8 flex flex-1 flex-col md:min-h-0"
         >
-            <h2
+            <h1
                 id="recent-projects-heading"
-                className="mb-4 shrink-0 text-xl font-medium text-content"
+                className="mb-4 shrink-0 border-b border-content pb-1 text-2xl font-medium text-content"
             >
                 Recents
-            </h2>
+            </h1>
 
             <div className="flex-1 rounded-xl border border-outline bg-surface md:min-h-0 md:overflow-y-auto">
                 {mockProjects.map((project) => (
