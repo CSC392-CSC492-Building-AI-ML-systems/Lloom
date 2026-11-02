@@ -51,7 +51,7 @@
     --danger: #ff8585;
 
     --placeholder-surface: #394450;
-    --icon-on-completed-step: #c4cdd8;
+    --icon-on-completed-step: #14191f;
 }
 
 /* Expose semantic colors to Tailwind */
@@ -84,4 +84,12 @@ body {
     background: var(--page);
     color: var(--content);
     font-family: var(--font-roboto), Arial, sans-serif;
+}
+
+.logo-dark,
+.dark .logo-light {
+    display: none;
+}
+.dark .logo-dark {
+    display: block;
 }
