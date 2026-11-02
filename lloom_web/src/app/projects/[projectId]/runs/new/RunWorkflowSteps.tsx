@@ -28,7 +28,7 @@ export default function RunWorkflowSteps({ currentStep }: { currentStep: 1 | 2 }
             >
                 <span
                     aria-hidden="true"
-                    className={`flex h-[42px] w-[42px] items-center justify-center rounded-full text-[22px] ${currentStep === 2 ? "bg-primary text-on-primary" : "bg-content-secondary text-surface"}`}
+                    className={`flex h-[42px] w-[42px] items-center justify-center rounded-full text-[22px] ${currentStep === 2 ? "bg-primary text-on-primary" : "bg-placeholder-surface text-content"}`}
                 >
                     2
                 </span>
