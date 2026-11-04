@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LLooM Web
+
+The Next.js frontend for LLooM (Language Model-based Concept Induction).
+
+Built with Next.js 16, React 19, TypeScript, and Tailwind CSS v4.
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 20.9 or newer
+- npm
+
+### Installation
+
+From the `lloom_web/` directory, install dependencies:
+
+```bash
+npm install
+```
+
+Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Changes to the source code will automatically update the application.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Development Workflow
 
-## Learn More
+The project uses ESLint, TypeScript strict mode, and Prettier to maintain code quality and consistency.
 
-To learn more about Next.js, take a look at the following resources:
+### Available Scripts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Command | Description |
+|---|---|
+| `npm run dev` | Start the development server |
+| `npm run build` | Create a production build |
+| `npm run start` | Start the production server |
+| `npm run lint` | Run ESLint |
+| `npm run typecheck` | Run TypeScript type checking |
+| `npm run format` | Automatically format source files with Prettier |
+| `npm run format:check` | Check formatting without modifying files |
+| `npm run check` | Run linting, type checking, and formatting checks |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Before Pushing Changes
 
-## Deploy on Vercel
+All contributors should run:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run check
+npm run build
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+If the formatting check fails, run:
+
+```bash
+npm run format
+```
+
+Then rerun the checks before pushing.
+
+## Development Guidelines
+
+Frontend architecture, coding conventions, styling guidelines, and expectations for AI coding agents are documented in [AGENTS.md](./AGENTS.md).
+
+The frontend's visual design is maintained in [Figma](https://www.figma.com/design/ZD63PswmLrGbgtIn4OulsL/LLooM-Web-UI-Design?node-id=1-2&t=m9eXBtnLz6cpRU9c-1).
+
+## Resources
+
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Tailwind CSS Documentation](https://tailwindcss.com/docs)
