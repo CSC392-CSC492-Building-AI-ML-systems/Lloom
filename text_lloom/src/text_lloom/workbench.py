@@ -592,7 +592,7 @@ class lloom:
         # Handle if selection failed
         if len(selected_concepts) == 0:
             concept_ids = list(self.concepts.keys())
-            selected_concepts = random.sample(concept_ids, max_concepts)
+            selected_concepts = random.sample(concept_ids, min(max_concepts, len(concept_ids)))
 
         # Activate only the selected concepts
         for c_id in selected_concepts:
