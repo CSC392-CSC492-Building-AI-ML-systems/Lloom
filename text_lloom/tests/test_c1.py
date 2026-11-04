@@ -2,6 +2,7 @@
 # A failed score should be NaN (not 0, which means a real "no match"),
 # and distill/synthesize should warn when they drop failed responses.
 import asyncio
+import json
 import math
 
 import pandas as pd
@@ -61,6 +62,12 @@ def test_unknown_letter_scores_nan():
 def test_real_no_match_still_zero():
     out = score('{"pattern_results": [{"example_id": "1", "answer": "E", "rationale": "no"}]}')
     assert out["score"].tolist() == [0.0]
+
+
+def test_failed_score_is_null_in_json():
+    # API responses should use to_json. json.dumps writes a bare NaN, which JSON.parse rejects.
+    records = json.loads(score("garbage").to_json(orient="records"))
+    assert records[0]["score"] is None
 
 
 def test_score_helper_missing_docs_nan():
