@@ -72,7 +72,6 @@ pip install text_lloom
 
 ## Contact
 LLooM is a research prototype and still under active development! Feel free to reach out to Michelle Lam at mlam4@cs.stanford.edu if you have questions, run into issues, or want to contribute.
-
 ## Citation
 If you find this work useful to you, we'd appreciate you citing our paper!
 ```
