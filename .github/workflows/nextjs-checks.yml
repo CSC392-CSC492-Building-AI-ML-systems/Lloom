@@ -1,0 +1,42 @@
+
+name: Next.js Frontend Checks
+
+on:
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nextjs:
+    name: Next.js Validation
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: lloom_web
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: lloom_web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Next.js types
+        run: npx next typegen
+
+      - name: Run lint, typecheck, and formatting checks
+        run: npm run check
+
+      - name: Verify production build
+        run: npm run build
