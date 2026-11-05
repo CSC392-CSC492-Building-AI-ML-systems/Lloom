@@ -33,9 +33,11 @@ def test_json_load():
 
 def test_parse_bucketed_score():
     assert parse_bucketed_score("A") == 1.0
+    assert parse_bucketed_score("B") == 0.75
     assert parse_bucketed_score("C") == 0.5
+    assert parse_bucketed_score("D") == 0.25
     assert parse_bucketed_score("E") == 0.0
-    assert parse_bucketed_score("B because it fits") == 0.75  # only first letter is used
+    assert parse_bucketed_score("B because it fits") == 0.75
     assert math.isnan(parse_bucketed_score("Z"))
 
 

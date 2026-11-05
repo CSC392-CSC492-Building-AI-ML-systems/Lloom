@@ -688,11 +688,28 @@ def parse_bucketed_score(x):
         "D": 0.25,
         "E": 0.0,
     }
-    if len(x) > 1:
-        x = x[0]
-    if x not in answer_scores.keys():
+    if not isinstance(x, str):
         return FAILED_SCORE
-    return answer_scores[x]
+
+    # Parse letter options
+    letter_match = re.match(r"\W*(?:(?:answer|option)\W*)?([a-e])(?![a-z])", x, re.IGNORECASE)
+    if letter_match:
+        return answer_scores[letter_match.group(1).upper()]
+
+    # 2) Parse Lables
+    label_to_letter = [
+        ("strongly disagree", "E"),
+        ("neither agree nor disagree", "C"),
+        ("strongly agree", "A"),
+        ("disagree", "D"),
+        ("agree", "B"),
+    ]
+    x_lower = x.lower()
+    for label, letter in label_to_letter:
+        if label in x_lower:
+            return answer_scores[letter]
+
+    return FAILED_SCORE
 
 def get_score_df(res, in_df, concept, concept_id, text_col, doc_id_col, get_highlights):
     # Cols: doc_id, text, concept_id, concept_name, concept_prompt, score, highlight
