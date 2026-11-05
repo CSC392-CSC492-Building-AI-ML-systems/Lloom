@@ -16,6 +16,7 @@ import {
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import type { ProfilePresentation } from "./profile.fixtures";
 import { useTheme } from "./ThemeProvider";
 
@@ -175,21 +176,41 @@ export default function ProfileMenu({ profile }: { profile: ProfilePresentation 
                         </div>
                         <div className="px-4 pb-3">
                             <div className="py-2">
-                                {actions.map(({ label, icon: Icon }) => (
-                                    <button
-                                        key={label}
-                                        type="button"
-                                        onClick={() =>
-                                            setNotice(
-                                                `${label} is not yet implemented.${label === "Sign In" || label === "Sign Out" ? " No authentication state has changed." : ""}`,
-                                            )
-                                        }
-                                        className="flex min-h-11 w-full items-center gap-3 rounded-lg py-2 text-left text-base hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                                    >
-                                        <Icon size={20} aria-hidden="true" className="shrink-0" />
-                                        {label}
-                                    </button>
-                                ))}
+                                {actions.map(({ label, icon: Icon }) =>
+                                    label === "API & Model Settings" ? (
+                                        <Link
+                                            key={label}
+                                            href="/settings/models"
+                                            onClick={() => close(false)}
+                                            className="flex min-h-11 w-full items-center gap-3 rounded-lg py-2 text-left text-base hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                                        >
+                                            <Icon
+                                                size={20}
+                                                aria-hidden="true"
+                                                className="shrink-0"
+                                            />
+                                            {label}
+                                        </Link>
+                                    ) : (
+                                        <button
+                                            key={label}
+                                            type="button"
+                                            onClick={() =>
+                                                setNotice(
+                                                    `${label} is not yet implemented.${label === "Sign In" || label === "Sign Out" ? " No authentication state has changed." : ""}`,
+                                                )
+                                            }
+                                            className="flex min-h-11 w-full items-center gap-3 rounded-lg py-2 text-left text-base hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                                        >
+                                            <Icon
+                                                size={20}
+                                                aria-hidden="true"
+                                                className="shrink-0"
+                                            />
+                                            {label}
+                                        </button>
+                                    ),
+                                )}
                             </div>
                             <fieldset className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-outline pt-3">
                                 <legend className="sr-only">Appearance</legend>
