@@ -448,6 +448,24 @@ def get_merge_results(merged):
         out += cur_out + "\n"
     return out
 
+def load_review_list(res, key, step, is_valid=lambda x: isinstance(x, str)):
+    # Review only refines concepts: a bad reply skips it rather than losing the whole run
+    parsed = json_load(res, top_level_key=key)
+    if not isinstance(parsed, list):
+        print(f"WARNING {step}: LLM response missing or unparseable, skipping this step")
+        return []
+    valid = [x for x in parsed if is_valid(x)]
+    if len(valid) < len(parsed):
+        print(f"WARNING {step}: ignored {len(parsed) - len(valid)}/{len(parsed)} malformed entries")
+    return valid
+
+def is_valid_merge(m):
+    if not isinstance(m, dict):
+        return False
+    themes = m.get("original_themes")
+    return (isinstance(themes, list) and len(themes) == 2 and all(isinstance(t, str) for t in themes)
+            and isinstance(m.get("merged_theme_name"), str) and isinstance(m.get("merged_theme_prompt"), str))
+
 # Input: concept_df (columns: doc_id, text, concept_id, concept_name, concept_prompt)
 # Parameters: n_concepts
 # Output: 
@@ -508,7 +526,7 @@ async def review_remove(concepts, concept_df, concept_col_prefix, model, seed, s
 
     # Process results
     res = res_text[0]
-    concepts_to_remove = json_load(res, top_level_key="remove")
+    concepts_to_remove = load_review_list(res, "remove", "Review-remove")
 
     if concept_df is not None:
         concept_df_out = concept_df.copy()
@@ -556,7 +574,7 @@ async def review_merge(concepts, concept_df, concept_col_prefix, model, sess):
 
     # Process results
     res = res_text[0]
-    concepts_to_merge = json_load(res, top_level_key="merge")
+    concepts_to_merge = load_review_list(res, "merge", "Review-merge", is_valid=is_valid_merge)
 
     if concept_df is not None:
         concept_df_out = concept_df.copy()
@@ -569,10 +587,7 @@ async def review_merge(concepts, concept_df, concept_col_prefix, model, sess):
     c_ids_to_remove = []
     for merge_result in concepts_to_merge:
         orig_concepts = merge_result["original_themes"]
-        # Only allow merging pairs
-        if len(orig_concepts) != 2:
-            continue
-        
+
         # Don't allow duplicates (in prior merge pairs)
         for orig_concept in orig_concepts:
             if orig_concept in concepts_to_remove:
@@ -626,7 +641,7 @@ async def review_select(concepts, max_concepts, model, sess):
 
     # Process results
     res = res_text[0]
-    selected_concept_names = json_load(res, top_level_key="selected")
+    selected_concept_names = load_review_list(res, "selected", "Review-select")
 
     selected_concepts = []
     for c_id, c in concepts.items():
