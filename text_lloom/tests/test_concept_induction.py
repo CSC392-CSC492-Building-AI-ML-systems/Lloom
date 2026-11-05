@@ -1,8 +1,9 @@
 # Pins the current behavior of the small pure helpers in concept_induction.py.
+import math
+
 import pandas as pd
 
 from text_lloom.concept_induction import (
-    NAN_SCORE,
     clean_item_id,
     clean_score,
     edit_concept,
@@ -35,7 +36,7 @@ def test_parse_bucketed_score():
     assert parse_bucketed_score("C") == 0.5
     assert parse_bucketed_score("E") == 0.0
     assert parse_bucketed_score("B because it fits") == 0.75  # only first letter is used
-    assert parse_bucketed_score("Z") == NAN_SCORE
+    assert math.isnan(parse_bucketed_score("Z"))
 
 
 def test_parse_tf_answer():

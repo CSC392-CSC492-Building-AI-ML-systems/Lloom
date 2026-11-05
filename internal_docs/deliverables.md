@@ -62,6 +62,7 @@ Current gaps:
   - Long steps run as background jobs with progress reporting.
   - Sessions are stored in SQLite.
   - The API key comes from a local `.env`.
+  - Serialize score data with `df.to_json(orient="records")`, so failed scores reach the frontend as `null`. Failed scores are NaN in Python, and `json.dumps` would write a bare `NaN`, which `JSON.parse` rejects. Don't send them through `clean_score`, which turns NaN into 0 and makes a failure look like a real "no match".
 - **Refactor `lloom`** so it runs outside Jupyter:
   - replace the blocking `input()` prompts with an approval step (the cost estimators currently only print; make them return values);
   - make the notebook-only code optional: the widget imports in `__init__.py` / `concept_induction.py`, `yaspin` spinners, `display()`, and the state read from `select_widget` (`__get_active_concepts`, `__set_all_concepts_active`, `add`);

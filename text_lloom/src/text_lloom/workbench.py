@@ -527,34 +527,37 @@ class lloom:
                 )
                 spinner.text = "Done"
                 spinner.ok("✅")
+
+
             if debug:
                 print(synth_logs)
 
-                # Review current concepts (remove low-quality, merge similar)
-                if auto_review:
-                    step_name = "Review"
-                    self.print_step_name(step_name)
-                    with self.spinner_wrapper() as spinner:
-                        _, df_concepts, review_logs = await review(
-                            concepts=self.concepts, 
-                            concept_df=df_concepts, 
-                            concept_col_prefix=concept_col_prefix, 
-                            model=self.synth_model, 
-                            seed=seed,
-                            sess=self,
-                            return_logs=True,
-                        )
-                        spinner.text = "Done"
-                        spinner.ok("✅")
-                    if debug:
-                        print(review_logs)
-
-                self.concept_history[i] = self.concepts
+            # Review current concepts (remove low-quality, merge similar)
+            if auto_review:
+                step_name = "Review"
+                self.print_step_name(step_name)
+                with self.spinner_wrapper() as spinner:
+                    _, df_concepts, review_logs = await review(
+                        concepts=self.concepts, 
+                        concept_df=df_concepts, 
+                        concept_col_prefix=concept_col_prefix, 
+                        model=self.synth_model, 
+                        seed=seed,
+                        sess=self,
+                        return_logs=True,
+                    )
+                    spinner.text = "Done"
+                    spinner.ok("✅")
                 if debug:
-                    # Print results
-                    print(f"\n\n{self.highlight_txt('Synthesize', color='blue')} {i + 1}: (n={len(self.concepts)} concepts)")
-                    for k, c in self.concepts.items():
-                        print(f'- Concept {k}:\n\t{c.name}\n\t- Prompt: {c.prompt}')
+                    print(review_logs)
+            self.concept_history[i] = self.concepts
+           
+                
+            if debug:
+                # Print results
+                print(f"\n\n{self.highlight_txt('Synthesize', color='blue')} {i + 1}: (n={len(self.concepts)} concepts)")
+                for k, c in self.concepts.items():
+                    print(f'- Concept {k}:\n\t{c.name}\n\t- Prompt: {c.prompt}')
             
             # Update synthesize params for next iteration
             df_concepts["synth_doc_col"] = df_concepts[f"{concept_col_prefix}_name"] + ": " + df_concepts[f"{concept_col_prefix}_prompt"]

@@ -39,11 +39,17 @@ else:
 
 # CONSTANTS ================================
 NAN_SCORE = 0  # Numerical score to use in place of NaN values for matrix viz
+FAILED_SCORE = float("nan")  # Score for docs with no usable LLM answer (0.0 is a real "no match")
+FAILED_RATIONALE = "LLM response missing or unparseable"
 OUTLIER_CRITERIA = "Did the example not match any of the above concepts?"
 SCORE_DF_OUT_COLS = ["doc_id", "text", "concept_id", "concept_name", "concept_prompt", "score", "rationale", "highlight", "concept_seed"]
 
 
 # HELPER functions ================================
+def warn_dropped(step, n_failed, total):
+    if n_failed > 0:
+        print(f"WARNING {step}: {n_failed}/{total} LLM responses failed and were dropped")
+
 
 def json_load(s, top_level_key=None):
     def get_top_level_key(d):
@@ -155,12 +161,16 @@ async def distill_filter(text_df, doc_col, doc_id_col, model, n_quotes=3, prompt
 
     # Process results
     ex_ids = [ex_id for ex_id in text_df[doc_id_col].tolist()]
+    n_failed = 0
     for ex_id, res in zip(ex_ids, res_text):
         cur_filtered_list = json_load(res, top_level_key="relevant_quotes")
         if cur_filtered_list is not None:
             cur_filtered = "\n".join(cur_filtered_list)
             filtered_ex.append(cur_filtered)
             rows.append([ex_id, cur_filtered])
+        else:
+            n_failed += 1
+    warn_dropped("Distill-filter", n_failed, len(res_text))
     quote_df = pd.DataFrame(rows, columns=[doc_id_col, doc_col])
     
     save_progress(sess, quote_df, step_name="Distill-filter", start=start, tokens=tokens, model=model)
@@ -209,12 +219,16 @@ async def distill_summarize(text_df, doc_col, doc_id_col, model, n_bullets="2-4"
     res_text, tokens = await multi_query_gpt_wrapper(prompt_template, arg_dicts, model)
 
     # Process results
+    n_failed = 0
     for ex_id, res in zip(all_ex_ids, res_text):
         cur_bullets_list = json_load(res, top_level_key="bullets")
         if cur_bullets_list is not None:
             for bullet in cur_bullets_list:
                 # Expand each bullet into its own row
                 rows.append([ex_id, bullet])
+        else:
+            n_failed += 1
+    warn_dropped("Distill-summarize", n_failed, len(res_text))
     bullet_df = pd.DataFrame(rows, columns=[doc_id_col, doc_col])
 
     save_progress(sess, bullet_df, step_name="Distill-summarize", start=start, tokens=tokens, model=model)
@@ -368,6 +382,7 @@ async def synthesize(cluster_df, doc_col, doc_id_col, model, cluster_id_col="clu
     concepts = {}
     rows = []
     logs = ""
+    n_failed = 0
     for cur_cluster_id, res in zip(cluster_ids, res_text):
         cur_concepts = json_load(res, top_level_key="patterns")
         if cur_concepts is not None:
@@ -396,6 +411,9 @@ async def synthesize(cluster_df, doc_col, doc_id_col, model, cluster_id_col="clu
             logs += cur_log
             if verbose:
                 print(cur_log)
+        else:
+            n_failed += 1
+    warn_dropped("Synthesize", n_failed, len(res_text))
     # doc_id, text, concept_id, concept_name, concept_prompt
     concept_df = pd.DataFrame(rows, columns=[doc_id_col, doc_col, concept_col_prefix, f"{concept_col_prefix}_name", f"{concept_col_prefix}_prompt", "seed"])
 
@@ -673,7 +691,7 @@ def parse_bucketed_score(x):
     if len(x) > 1:
         x = x[0]
     if x not in answer_scores.keys():
-        return NAN_SCORE
+        return FAILED_SCORE
     return answer_scores[x]
 
 def get_score_df(res, in_df, concept, concept_id, text_col, doc_id_col, get_highlights):
@@ -688,7 +706,7 @@ def get_score_df(res, in_df, concept, concept_id, text_col, doc_id_col, get_high
             if "answer" in ex:
                 ans = parse_bucketed_score(ex["answer"])
             else:
-                ans = NAN_SCORE
+                ans = FAILED_SCORE
             
             if "example_id" in ex:
                 doc_id = ex["example_id"]
@@ -701,6 +719,8 @@ def get_score_df(res, in_df, concept, concept_id, text_col, doc_id_col, get_high
                         rationale = ex["rationale"]
                     else:
                         rationale = ""   # Set rationale to empty string
+                    if math.isnan(ans):
+                        rationale = FAILED_RATIONALE
 
                     if get_highlights and ("quote" in ex):
                         row = [doc_id, text, concept_id, concept_name, concept_prompt, ans, rationale, ex["quote"], concept_seed]
@@ -725,8 +745,8 @@ def get_empty_score_df(in_df, concept, concept_id, text_col, doc_id_col):
     out_df["concept_id"] = concept_id
     out_df["concept_name"] = concept_name
     out_df["concept_prompt"] = concept_prompt
-    out_df["score"] = NAN_SCORE
-    out_df["rationale"] = ""
+    out_df["score"] = FAILED_SCORE
+    out_df["rationale"] = FAILED_RATIONALE
     out_df["highlight"] = ""
     out_df["concept_seed"] = concept.seed
     return out_df[SCORE_DF_OUT_COLS]

@@ -47,5 +47,5 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: text_lloom/pyproject.toml
-      - run: pip install -e text_lloom pytest
+      - run: pip install -e text_lloom pytest pytest-asyncio
       - run: pytest text_lloom/tests
