@@ -1,4 +1,5 @@
 # Python
+.venv/
 text_lloom/.venv/
 *.egg-info/
 __pycache__/
@@ -14,5 +15,5 @@ node_modules/
 
 *.DS_Store
 CLAUDE.md
-
+.claude/
 .playwright-mcp/
