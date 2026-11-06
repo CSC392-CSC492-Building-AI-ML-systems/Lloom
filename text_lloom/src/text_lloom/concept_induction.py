@@ -23,6 +23,7 @@ import asyncio
 from hdbscan import HDBSCAN
 import umap
 
+
 # Local imports
 if __package__ is None or __package__ == '':
     # uses current directory visibility
@@ -36,6 +37,13 @@ else:
     from .prompts import *
     from .concept import Concept
     from .__init__ import MatrixWidget, ConceptSelectWidget
+
+#Logging Import
+import logging
+logger = logging.getLogger(__name__)
+
+
+
 
 # CONSTANTS ================================
 NAN_SCORE = 0  # Numerical score to use in place of NaN values for matrix viz
@@ -125,6 +133,82 @@ def filter_empty_rows(df, text_col_name):
     # Remove rows where the specified column is empty
     df_out = df[df[text_col_name].apply(lambda x: len(x) > 0)]
     return df_out
+
+
+
+
+
+
+
+
+
+
+
+
+
+# HELPER functions ================================
+
+def _norm_id(x):
+    return str(x).strip()
+
+
+def _numeric_id_formatter(s):
+    # converts 1.0 -> 1, and 0001 -> 1, cleanning unesscessary 0's and positions
+    #Also checks if input is a numeric value, returning None if not
+
+    try: 
+        f = float(s)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(f) or f != int(f):
+        return None
+    return str(int(f))
+
+def _has_leading_zeros(s):
+    s = s.lstrip("+-")
+    return len(s.split(".")[0]) > 1 and s.startswith("0")
+
+def resolve_doc_id(ret_id,canon_id):
+    """
+    Map an LLM-returned example_id onto one dataframe ID.
+    Returns the original dataframe ID value, or None if unmatched/unknown.
+    """
+    canon_id = list(canon_id)
+    s = _norm_id(ret_id)
+
+    exact = [cid for cid in canon_id if _norm_id(cid) == s]
+    if len(exact) == 1:
+        return exact[0]
+    if len(exact) > 1:
+        return None
+
+    n = _numeric_id_formatter(s)
+    if n is None:
+        return None
+
+    num = [cid for cid in canon_id if _numeric_id_formatter(_norm_id(cid)) == n]
+    if len(num) != 1:
+        return None
+
+    if _has_leading_zeros(s) or _has_leading_zeros(_norm_id(num[0])):
+        return None
+
+    return num[0]
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # CORE functions ================================
 
@@ -719,6 +803,7 @@ def get_score_df(res, in_df, concept, concept_id, text_col, doc_id_col, get_high
     concept_seed = concept.seed
     if res_dict is not None:
         rows = []
+        canon_ids = in_df[doc_id_col].tolist()
         for ex in res_dict:
             if "answer" in ex:
                 ans = parse_bucketed_score(ex["answer"])
@@ -726,8 +811,25 @@ def get_score_df(res, in_df, concept, concept_id, text_col, doc_id_col, get_high
                 ans = FAILED_SCORE
             
             if "example_id" in ex:
-                doc_id = ex["example_id"]
+                doc_id = resolve_doc_id(ex["example_id"],canon_ids)
+                #text_list = in_df[in_df[doc_id_col] == doc_id][text_col].tolist()
+
+                #Adds id checking, unlike before where it tested the doc, by checking if
+                # it is a real ID 
+                if doc_id is None:
+                    logger.warning(
+                        "get_score_df: invalid, could not resolve example_id %r for concept %r"
+                        "doc score returns to %s",
+                        ex["example_id"], concept_name, NAN_SCORE,
+                    )
+                    continue
+
                 text_list = in_df[in_df[doc_id_col] == doc_id][text_col].tolist()
+
+
+
+
+
                 if len(text_list) > 0:
                     # Document is in the dataset
                     text = text_list[0]
