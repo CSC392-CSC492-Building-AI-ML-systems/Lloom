@@ -11,14 +11,11 @@ from text_lloom.concept_induction import get_score_df
 CONCEPT = SimpleNamespace(name="c-name", prompt="c-prompt", seed=None)
 
 
-import logging
-
-def test_unresolved_id_logs_warning(caplog):
+def test_unresolved_id_prints_warning(capsys):
     df = make_df(["1", "2"], ["first", "second"])
-    with caplog.at_level(logging.WARNING):
-        out = run(make_res(999), df)
+    out = run(make_res(999), df)
     assert len(out) == 0
-    assert "999" in caplog.text
+    assert "999" in capsys.readouterr().out
     
 def make_df(ids, texts):
     return pd.DataFrame({"doc_id": ids, "text": texts})

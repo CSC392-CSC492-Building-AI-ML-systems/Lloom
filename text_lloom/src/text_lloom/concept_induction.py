@@ -38,13 +38,6 @@ else:
     from .concept import Concept
     from .__init__ import MatrixWidget, ConceptSelectWidget
 
-#Logging Import
-import logging
-logger = logging.getLogger(__name__)
-
-
-
-
 # CONSTANTS ================================
 NAN_SCORE = 0  # Numerical score to use in place of NaN values for matrix viz
 OUTLIER_CRITERIA = "Did the example not match any of the above concepts?"
@@ -767,10 +760,10 @@ def get_score_df(res, in_df, concept, concept_id, text_col, doc_id_col, get_high
                 #Adds id checking, unlike before where it tested the doc, by checking if
                 # it is a real ID 
                 if doc_id is None:
-                    logger.warning(
-                        "get_score_df: invalid, could not resolve example_id %r for concept %r"
-                        "doc score returns to %s",
-                        ex["example_id"], concept_name, NAN_SCORE,
+                    print(
+                        "get_score_df: invalid, could not resolve "
+                        f"example_id {ex['example_id']!r} for concept {concept_name!r}; "
+                        f"doc score returns to {NAN_SCORE}"
                     )
                     continue
 
