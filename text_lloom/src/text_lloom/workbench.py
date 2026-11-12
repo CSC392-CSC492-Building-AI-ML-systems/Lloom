@@ -29,6 +29,11 @@ else:
     from .llm import Model, EmbedModel, OpenAIModel, OpenAIEmbedModel, build_models, read_env_settings
 
 # WORKBENCH class ================================
+def has_price(model):
+    # Custom models may lack `cost`; OpenAIModel with no known price has cost=None
+    return getattr(model, "cost", None) is not None
+
+
 class lloom:
     def __init__(
         self,
@@ -217,26 +222,26 @@ class lloom:
         est_concept_tokens = 40  # Tokens for one generated concept JSON
 
         est_cost = {}
-        
+        quotes_tokens_per_doc = params["filter_n_quotes"] * est_quote_tokens
+        bullets_tokens_per_doc = params["summ_n_bullets"] * est_bullet_tokens
+
         model = self.distill_model
-        if hasattr(model, "cost"):
+        if has_price(model):
             # Filter: generate filter_n_quotes for each doc
             filter_in_tokens = np.sum([model.count_tokens_fn(model, filter_prompt + doc) for doc in self.in_df[self.doc_col].tolist()])
-            quotes_tokens_per_doc = params["filter_n_quotes"] * est_quote_tokens 
             filter_out_tokens = quotes_tokens_per_doc * len(self.in_df)
             est_cost["distill_filter"] = model.cost_fn(model, (filter_in_tokens, filter_out_tokens))
 
             # Summarize: create n_bullets for each doc
             summ_prompt_tokens = model.count_tokens_fn(model, summarize_prompt)
             summ_in_tokens = np.sum([(summ_prompt_tokens + quotes_tokens_per_doc) for _ in range(len(self.in_df))])
-            bullets_tokens_per_doc = params["summ_n_bullets"] * est_bullet_tokens
             summ_out_tokens = bullets_tokens_per_doc * len(self.in_df)
             est_cost["distill_summarize"] = model.cost_fn(model, (summ_in_tokens, summ_out_tokens))
         else:
             print(f"Cost estimates not available for distill model `{model.name}`")
 
         model = self.cluster_model
-        if hasattr(model, "cost"):
+        if has_price(model):
             # Cluster: embed each bullet point
             cluster_cost = model.cost[0]
             cluster_tokens = bullets_tokens_per_doc * len(self.in_df)
@@ -245,7 +250,7 @@ class lloom:
             print(f"Cost estimates not available for cluster model `{model.name}`")
 
         model = self.synth_model
-        if hasattr(model, "cost"):
+        if has_price(model):
             # Synthesize: create n_concepts for each of the est_n_clusters
             n_bullets_per_cluster = (params["summ_n_bullets"] * len(self.in_df)) / est_n_clusters
             synth_prompt_tokens = model.count_tokens_fn(model, synthesize_prompt)
@@ -260,16 +265,18 @@ class lloom:
         else:
             print(f"Cost estimates not available for synth model `{model.name}`")
         
+        total_cost = sum(c[0] + c[1] for c in est_cost.values())
         if len(est_cost) > 0:
-            total_cost = np.sum([c[0] + c[1] for c in est_cost.values()])
             print(f"\n\n{self.bold_txt('Estimated cost')}: ${np.round(total_cost, 2)}")
             print("**Please note that this is only an approximate cost estimate**")
 
             if verbose:
                 print(f"\nEstimated cost breakdown:")
                 for step_name, cost in est_cost.items():
-                    total_cost = np.sum(cost)
-                    print(f"\t{step_name}: {total_cost:0.4f}")
+                    print(f"\t{step_name}: {np.sum(cost):0.4f}")
+
+        available = all(has_price(m) for m in (self.distill_model, self.cluster_model, self.synth_model))
+        return {"steps": est_cost, "total": total_cost, "available": available}
 
     # Estimate cost of scoring for the given number of concepts
     def estimate_score_cost(self, n_concepts=None, batch_size=5, get_highlights=True, verbose=False, df_to_score=None):
@@ -285,12 +292,13 @@ class lloom:
         est_concept_tokens = 20  # Tokens for concept name + prompt
         est_score_json_tokens = 100  # Tokens for score JSON for one document
             
+        if df_to_score is None:
+            df_to_score = self.df_to_score
+
         model = self.score_model
-        if hasattr(model, "cost"):
+        if has_price(model):
             score_prompt_tokens = model.count_tokens_fn(model, score_prompt)
             n_batches = math.ceil(len(df_to_score) / batch_size)
-            if df_to_score is None:
-                df_to_score = self.df_to_score
 
             all_doc_tokens = np.sum([model.count_tokens_fn(model, doc) for doc in df_to_score[self.doc_col].tolist()])  # Tokens to encode all documents
             score_in_tokens = all_doc_tokens + (n_batches * (score_prompt_tokens + est_concept_tokens))
@@ -306,8 +314,10 @@ class lloom:
                 print(f"\nEstimated cost breakdown:")
                 for step_name, cost in zip(["Input", "Output"], est_cost):
                     print(f"\t{step_name}: {cost:0.4f}")
+            return {"steps": {"score": est_cost}, "total": sum(est_cost), "available": True}
         else:
             print(f"Cost estimates not available for score model `{model.name}`")
+            return {"steps": {}, "total": 0, "available": False}
 
     def auto_suggest_parameters(self, sample_size=None, target_n_concepts=20, debug=False):
         # Suggests concept generation parameters based on rough heuristics
@@ -343,7 +353,7 @@ class lloom:
         models = ["distill_model", "cluster_model", "synth_model", "score_model"]
         for model_name in models:
             model = getattr(self, model_name)
-            if not hasattr(model, "cost"):
+            if not has_price(model):
                 print(f"Token and cost summaries not available for {model_name} `{model.name}`")
             else:
                 has_cost = True
