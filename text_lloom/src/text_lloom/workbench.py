@@ -566,7 +566,7 @@ class lloom:
             synth_n_concepts = math.floor(synth_n_concepts * 0.75)
         print("✅ Done with concept generation!")
 
-    def __concepts_to_json(self):
+    def get_concepts_json(self):
         concept_dict = {c_id: c.to_dict() for c_id, c in self.concepts.items()}
         # Get examples from example IDs
         for c_id, c in concept_dict.items():
@@ -578,7 +578,7 @@ class lloom:
         return json.dumps(concept_dict)
     
     def select(self):
-        concepts_json = self.__concepts_to_json()
+        concepts_json = self.get_concepts_json()
         w = get_select_widget(concepts_json)
         self.select_widget = w
         return w
@@ -614,8 +614,30 @@ class lloom:
     def __set_all_concepts_active(self):
         for c_id, c in self.concepts.items():
             c.active = True
-        # Update widget
-        self.select_widget = self.select()
+        self.__refresh_widget()
+
+    def __refresh_widget(self):
+        # Rebuild the select widget so its checkboxes match `active`; skipped when no widget was opened (e.g. on a server)
+        if self.select_widget is not None:
+            self.select()
+
+    def set_active(self, concept_ids):
+        # Make exactly these concepts active, all others inactive
+        unknown = set(concept_ids) - set(self.concepts)
+        if unknown:
+            raise ValueError(f"Unknown concept IDs: {sorted(unknown)}")
+        for c_id, c in self.concepts.items():
+            c.active = c_id in concept_ids
+        self.__refresh_widget()
+
+    def update_concept(self, c_id, name=None, prompt=None):
+        # Edit a concept; its old scores no longer match, so drop them and let the next score() redo it
+        c = self.concepts[c_id]
+        if name is not None:
+            c.name = name
+        if prompt is not None:
+            c.prompt = prompt
+        self.results.pop(c_id, None)
 
     # Score the specified concepts
     # If c_ids is None, only score the concepts that are active
@@ -862,9 +884,7 @@ class lloom:
         # Add concept
         c = Concept(name=name, prompt=prompt, example_ids=ex_ids, active=True)
         self.concepts[c.id] = c
-
-        # Update widget
-        self.select_widget = self.select()
+        self.__refresh_widget()
 
         # Run scoring
         cur_score_df = await self.score(c_ids=[c.id], get_highlights=get_highlights, debug=debug)
