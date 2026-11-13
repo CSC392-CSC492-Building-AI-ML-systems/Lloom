@@ -14,7 +14,6 @@ import requests
 from IPython.display import display
 
 import nltk
-nltk.download('punkt_tab', quiet=True)
 
 # Local imports
 if __package__ is None or __package__ == '':
@@ -318,6 +317,11 @@ class lloom:
             sample_docs = self.in_df[self.doc_col].tolist()
 
         # Get number of sentences in each document
+        # sent_tokenize needs punkt_tab; download it here (not at import) and only if missing
+        try:
+            nltk.data.find("tokenizers/punkt_tab")
+        except LookupError:
+            nltk.download("punkt_tab", quiet=True)
         n_sents = [len(sent_tokenize(doc)) for doc in sample_docs]
         avg_n_sents = int(np.median(n_sents))
         if debug:
