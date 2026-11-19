@@ -916,7 +916,7 @@ async def score_helper(concept, batch_i, concept_id, df, text_col, doc_id_col, m
 #   --> text could be original, filtered (quotes), and/or summarized (bullets)
 # Parameters: threshold
 # Output: score_df (columns: doc_id, text, concept_id, concept_name, concept_prompt, score, highlight)
-async def score_concepts(text_df, text_col, doc_id_col, concepts, model, batch_size=5, get_highlights=False, sess=None, threshold=1.0):
+async def score_concepts(text_df, text_col, doc_id_col, concepts, model, batch_size=5, get_highlights=False, sess=None, threshold=1.0, progress=None):
     # Scoring operates on "text" column for each concept
     start = time.time()
 
@@ -926,6 +926,19 @@ async def score_concepts(text_df, text_col, doc_id_col, concepts, model, batch_s
 
     text_df[doc_id_col] = text_df[doc_id_col].astype(str)
     tasks = [score_helper(concept, concept_i, concept_id, text_df, text_col, doc_id_col, model, batch_size, get_highlights, sess=sess, threshold=threshold) for concept_i, (concept_id, concept) in enumerate(concepts.items())]
+
+    # Optional progress(step, done, total): once up front, then as each concept finishes
+    if progress is not None:
+        n_done = 0
+        async def report_when_done(task):
+            nonlocal n_done
+            result = await task
+            n_done += 1
+            progress("Score", n_done, len(tasks))
+            return result
+        progress("Score", 0, len(tasks))
+        tasks = [report_when_done(t) for t in tasks]
+
     score_dfs = await tqdm_asyncio.gather(*tasks, file=sys.stdout)
 
     # Combine score_dfs
