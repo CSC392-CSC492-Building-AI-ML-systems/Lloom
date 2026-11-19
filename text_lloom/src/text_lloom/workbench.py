@@ -422,7 +422,7 @@ class lloom:
         
 
     # HELPER FUNCTIONS ================================
-    async def gen(self, seed=None, params=None, n_synth=1, custom_prompts=None, auto_review=True, debug=True):
+    async def gen(self, seed=None, params=None, n_synth=1, custom_prompts=None, auto_review=True, debug=True, progress=None):
         if params is None:
             params = self.auto_suggest_parameters(debug=debug)
             if debug:
@@ -453,9 +453,22 @@ class lloom:
 
         # Run concept generation
         filter_n_quotes = params["filter_n_quotes"]
+
+        # Optional progress(step, done, total), called as each step starts (e.g. so a server can show a progress bar)
+        run_filter = (filter_n_quotes > 1) and (custom_prompts["distill_filter"] is not None)
+        run_summarize = custom_prompts["distill_summarize"] is not None
+        total_steps = run_filter + run_summarize + n_synth * (3 if auto_review else 2)
+        done_steps = 0
+        def report(step_name):
+            nonlocal done_steps
+            if progress is not None:
+                progress(step_name, done_steps, total_steps)
+            done_steps += 1
+
         if (filter_n_quotes > 1) and (custom_prompts["distill_filter"] is not None):
             step_name = "Distill-filter"
             self.print_step_name(step_name)
+            report(step_name)
             with self.spinner_wrapper() as spinner:
                 df_filtered = await distill_filter(
                     text_df=self.in_df, 
@@ -480,6 +493,7 @@ class lloom:
         if (custom_prompts["distill_summarize"] is not None):
             step_name = "Distill-summarize"
             self.print_step_name(step_name)
+            report(step_name)
             with self.spinner_wrapper() as spinner:
                 df_bullets = await distill_summarize(
                     text_df=self.df_filtered, 
@@ -510,6 +524,7 @@ class lloom:
 
             step_name = "Cluster"
             self.print_step_name(step_name)
+            report(step_name)
             with self.spinner_wrapper() as spinner:
                 df_cluster = await cluster(
                     text_df=df_cluster_in, 
@@ -525,6 +540,7 @@ class lloom:
             
             step_name = "Synthesize"
             self.print_step_name(step_name)
+            report(step_name)
             with self.spinner_wrapper() as spinner:
                 df_concepts, synth_logs = await synthesize(
                     cluster_df=df_cluster, 
@@ -550,6 +566,7 @@ class lloom:
             if auto_review:
                 step_name = "Review"
                 self.print_step_name(step_name)
+                report(step_name)
                 with self.spinner_wrapper() as spinner:
                     _, df_concepts, review_logs = await review(
                         concepts=self.concepts, 
@@ -656,7 +673,7 @@ class lloom:
     # Score the specified concepts
     # If c_ids is None, only score the concepts that are active
     # If score_all is True, set all concepts as active and score all concepts
-    async def score(self, c_ids=None, score_all=False, batch_size=1, get_highlights=True, ignore_existing=True, df=None, debug=True):
+    async def score(self, c_ids=None, score_all=False, batch_size=1, get_highlights=True, ignore_existing=True, df=None, debug=True, progress=None):
         concepts = {}
         if score_all:
             self.__set_all_concepts_active()
@@ -705,6 +722,7 @@ class lloom:
             get_highlights=get_highlights,
             sess=self,
             threshold=1.0,
+            progress=progress,
         )
         score_df = self.__escape_unicode(score_df)
 
