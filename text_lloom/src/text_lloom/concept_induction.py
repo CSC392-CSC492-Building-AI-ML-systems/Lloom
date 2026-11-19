@@ -1513,7 +1513,7 @@ def prep_vis_dfs(df, score_df, doc_id_col, doc_col, score_col, df_filtered, df_b
 
     return matrix_df, item_df, item_df_wide, metadata_dict
 
-# Generates the in-notebook visualization for concept induction results
+# Builds the data for the concept matrix visualization (no widget needed)
 #
 # Input:
 # - in_df: DataFrame (includes columns: doc_id_col, doc_col)
@@ -1533,7 +1533,12 @@ def prep_vis_dfs(df, score_df, doc_id_col, doc_col, score_col, df_filtered, df_b
 # - show_highlights: boolean (whether to show highlights)
 # - norm_by: string (column name to normalize by; either "slice" or "concept")
 # - debug: boolean (whether to print debug statements)
-def visualize(in_df, score_df, doc_col, doc_id_col, score_col, df_filtered, df_bullets, concepts, cols_to_show=[], slice_col=None, max_slice_bins=None, slice_bounds=None, show_highlights=False, norm_by=None, debug=False):
+#
+# Output: tuple (vis_dict, matrix_df, item_df, item_df_wide)
+# - vis_dict: dict with the six values the matrix view reads: data, data_items, data_items_wide,
+#   metadata (JSON strings), slice_col and norm_by (strings, "" if not set)
+def build_vis_data(in_df, score_df, doc_col, doc_id_col, score_col, df_filtered, df_bullets, concepts, cols_to_show=[], slice_col=None, max_slice_bins=None, slice_bounds=None, show_highlights=False, norm_by=None, debug=False):
+    cols_to_show = list(cols_to_show)  # prep_vis_dfs adds slice_col to this list, which would change the shared default
     matrix_df, item_df, item_df_wide, metadata_dict = prep_vis_dfs(in_df, score_df, doc_id_col, doc_col, score_col, df_filtered, df_bullets, concepts, cols_to_show=cols_to_show, slice_col=slice_col, max_slice_bins=max_slice_bins, slice_bounds=slice_bounds,show_highlights=show_highlights, norm_by=norm_by, debug=debug)
 
     data = matrix_df.to_json(orient='records')
@@ -1544,14 +1549,22 @@ def visualize(in_df, score_df, doc_col, doc_id_col, score_col, df_filtered, df_b
         slice_col = ""
     if norm_by is None:
         norm_by = ""
-    w = MatrixWidget(
-        data=data, 
-        data_items=data_items,
-        data_items_wide=data_items_wide, 
-        metadata=md,
-        slice_col=slice_col,
-        norm_by=norm_by,
-    )
+    vis_dict = {
+        "data": data,
+        "data_items": data_items,
+        "data_items_wide": data_items_wide,
+        "metadata": md,
+        "slice_col": slice_col,
+        "norm_by": norm_by,
+    }
+    return vis_dict, matrix_df, item_df, item_df_wide
+
+# Generates the in-notebook visualization for concept induction results
+# Takes the same input and parameters as build_vis_data and wraps its result in a MatrixWidget
+# Output: tuple (widget, matrix_df, item_df, item_df_wide)
+def visualize(in_df, score_df, doc_col, doc_id_col, score_col, df_filtered, df_bullets, concepts, cols_to_show=[], slice_col=None, max_slice_bins=None, slice_bounds=None, show_highlights=False, norm_by=None, debug=False):
+    vis_dict, matrix_df, item_df, item_df_wide = build_vis_data(in_df, score_df, doc_col, doc_id_col, score_col, df_filtered, df_bullets, concepts, cols_to_show=cols_to_show, slice_col=slice_col, max_slice_bins=max_slice_bins, slice_bounds=slice_bounds, show_highlights=show_highlights, norm_by=norm_by, debug=debug)
+    w = MatrixWidget(**vis_dict)
     return w, matrix_df, item_df, item_df_wide
 
 def get_select_widget(concepts_json):
