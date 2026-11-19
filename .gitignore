@@ -3,6 +3,8 @@
 text_lloom/.venv/
 *.egg-info/
 __pycache__/
+# lloom_api local SQLite database
+lloom_api/*.db
 
 # Environment
 .env
