@@ -814,18 +814,30 @@ class lloom:
     # - norm_by: str (how to normalize scores: "concept" or "slice")
     # - export_df: bool (whether to return a dataframe for export)
     def vis(self, cols_to_show=[], slice_col=None, max_slice_bins=5, slice_bounds=None, show_highlights=True, norm_by=None, export_df=False, include_outliers=False):
-        active_concepts = self.__get_active_concepts()
-        score_df = self.get_score_df()
+        widget, matrix_df, item_df, item_df_wide = visualize(**self.__get_vis_args(cols_to_show, slice_col, max_slice_bins, slice_bounds, show_highlights, norm_by))
+        if export_df:
+            return self.__get_df_for_export(item_df, include_outliers=include_outliers)
 
-        widget, matrix_df, item_df, item_df_wide = visualize(
+        return widget
+
+    # Returns the data the visualization shows, as a dict, without building a widget.
+    # Takes the same parameters as vis (except export_df and include_outliers, which only apply to notebook exports)
+    # Output: dict with the keys data, data_items, data_items_wide, metadata (JSON strings), slice_col and norm_by
+    def vis_data(self, cols_to_show=[], slice_col=None, max_slice_bins=5, slice_bounds=None, show_highlights=True, norm_by=None):
+        vis_dict, matrix_df, item_df, item_df_wide = build_vis_data(**self.__get_vis_args(cols_to_show, slice_col, max_slice_bins, slice_bounds, show_highlights, norm_by))
+        return vis_dict
+
+    def __get_vis_args(self, cols_to_show, slice_col, max_slice_bins, slice_bounds, show_highlights, norm_by):
+        # Arguments shared by vis (via visualize) and vis_data
+        return dict(
             in_df=self.in_df,
-            score_df=score_df,
+            score_df=self.get_score_df(),
             doc_col=self.doc_col,
             doc_id_col=self.doc_id_col,
             score_col="score",
             df_filtered=self.df_filtered,
             df_bullets=self.df_bullets,
-            concepts=active_concepts,
+            concepts=self.__get_active_concepts(),
             cols_to_show=cols_to_show,
             slice_col=slice_col,
             max_slice_bins=max_slice_bins,
@@ -833,10 +845,6 @@ class lloom:
             show_highlights=show_highlights,
             norm_by=norm_by,
         )
-        if export_df:
-            return self.__get_df_for_export(item_df, include_outliers=include_outliers)
-        
-        return widget
 
     def export_df(self, include_outliers=False):
         return self.vis(export_df=True, include_outliers=include_outliers)

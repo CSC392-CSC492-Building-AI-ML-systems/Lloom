@@ -2,6 +2,7 @@
 import pandas as pd
 
 import text_lloom.workbench as wb
+from text_lloom.concept_induction import MatrixWidget  # the copy of the class that visualize() builds
 
 URL = "http://localhost:11434/v1/"
 CUSTOM_ENV = {
@@ -53,3 +54,10 @@ def test_lloom_does_not_read_the_env_settings_when_all_models_are_passed(monkeyp
         distill_model=mine, cluster_model=mine, synth_model=mine, score_model=mine,
     )
     assert lloom.score_model is mine
+
+
+def test_vis_returns_a_widget_holding_the_same_data_as_vis_data(scored_lloom):
+    widget = scored_lloom.vis()
+    data = scored_lloom.vis_data()
+    assert isinstance(widget, MatrixWidget)
+    assert {key: getattr(widget, key) for key in data} == data
