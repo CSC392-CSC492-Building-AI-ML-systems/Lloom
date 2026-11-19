@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
+from app.db import initialize_database
 # lloom_api/lloom.db, independent of the current directory
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "lloom.db"
 
@@ -22,6 +22,10 @@ def create_app() -> FastAPI:
     )
 
     app.state.db_path = os.environ.get("LLOOM_DB_PATH", str(DEFAULT_DB_PATH))
+
+    @app.on_event("startup")
+    def create_database():
+        initialize_database(app.state.db_path)
 
     @app.get("/health")
     def health():
