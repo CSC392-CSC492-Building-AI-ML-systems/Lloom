@@ -1,28 +1,6 @@
 import RecentProjectItem from "./RecentProjectItem";
 
-type Project = {
-    id: string;
-    name: string;
-    lastOpened: Date;
-};
-
-const mockProjects: Project[] = [
-    {
-        id: "1",
-        name: "Customer Feedback Analysis",
-        lastOpened: new Date("2026-10-27T14:30:00"),
-    },
-    {
-        id: "2",
-        name: "Reddit Discussion Analysis",
-        lastOpened: new Date("2026-10-25T10:15:00"),
-    },
-    {
-        id: "3",
-        name: "Survey Responses",
-        lastOpened: new Date("2026-10-20T16:45:00"),
-    },
-];
+import { projectFixtures } from "@/fixtures/projects";
 
 export default function RecentProjects() {
     return (
@@ -38,11 +16,12 @@ export default function RecentProjects() {
             </h1>
 
             <div className="flex-1 rounded-xl border border-outline bg-surface md:min-h-0 md:overflow-y-auto">
-                {mockProjects.map((project) => (
+                {projectFixtures.map((project) => (
                     <RecentProjectItem
                         key={project.id}
+                        id={project.id}
                         name={project.name}
-                        lastOpened={project.lastOpened}
+                        lastOpened={new Date(project.lastOpened)}
                     />
                 ))}
             </div>

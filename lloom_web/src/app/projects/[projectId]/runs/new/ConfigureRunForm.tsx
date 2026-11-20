@@ -7,7 +7,6 @@ import type { FormEvent } from "react";
 import DataConfiguration from "./DataConfiguration";
 import ConceptGeneration from "./ConceptGeneration";
 import { useRunConfiguration } from "./RunConfigurationProvider";
-import { datasetFixtures } from "./configure-run.fixtures";
 import { validateConfiguration } from "./run-configuration";
 import type { RunConfiguration } from "./run-configuration";
 import RunWorkflowSteps from "./RunWorkflowSteps";
@@ -15,7 +14,14 @@ import RunWorkflowSteps from "./RunWorkflowSteps";
 export default function ConfigureRunForm() {
     const router = useRouter();
     const { projectId } = useParams<{ projectId: string }>();
-    const { configuration, updateConfiguration, selectDataset } = useRunConfiguration();
+    const {
+        configuration,
+        updateConfiguration,
+        selectDataset,
+        datasets: datasetFixtures,
+        draftQuery,
+        draftNotice,
+    } = useRunConfiguration();
     const [submitted, setSubmitted] = useState(false);
     const [notice, setNotice] = useState("");
     const formRef = useRef<HTMLFormElement>(null);
@@ -39,11 +45,16 @@ export default function ConfigureRunForm() {
             else formRef.current?.querySelector<HTMLElement>(`#${firstError}`)?.focus();
             return;
         }
-        router.push(`/projects/${encodeURIComponent(projectId)}/runs/new/review`);
+        router.push(`/projects/${encodeURIComponent(projectId)}/runs/new/review${draftQuery}`);
     }
 
     return (
         <form ref={formRef} noValidate onSubmit={handleSubmit} className="mt-5">
+            {draftNotice && (
+                <p role="status" className="mb-3 text-sm text-content-secondary">
+                    {draftNotice}
+                </p>
+            )}
             <div className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,616fr)_minmax(0,720fr)]">
                 <DataConfiguration
                     configuration={configuration}
