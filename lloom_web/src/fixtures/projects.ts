@@ -16,8 +16,11 @@ export type RunFixture = {
     name: string;
     datasetId: string;
     created: string;
+    temporary?: boolean;
 } & (
-    { status: "Draft"; configuration: RunConfiguration } | { status: "Completed"; concepts: number }
+    | { status: "Draft"; configuration: RunConfiguration }
+    | { status: "Completed"; concepts: number }
+    | { status: "Pending" | "Running" | "Failed" | "Cancelled"; temporary: true }
 );
 
 export type ProjectFixture = {

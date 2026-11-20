@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { FileText, Settings } from "lucide-react";
 import { useState } from "react";
-import type { ProjectFixture } from "@/fixtures/projects";
+import { useProjectRuns } from "./ProjectRunProvider";
+import type { ProjectFixture, RunFixture } from "@/fixtures/projects";
 import ProjectRunsTable from "./ProjectRunsTable";
 
 const cardClass = "min-w-0 rounded-[14px] border border-outline bg-surface p-5 md:p-6";
@@ -11,7 +12,21 @@ const headingClass = "border-l-[5px] border-primary pl-3 text-[23px] font-medium
 const focusClass =
     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
 
-export default function ProjectWorkspace({ project }: { project: ProjectFixture }) {
+export default function ProjectWorkspace({ project: fixtureProject }: { project: ProjectFixture }) {
+    const { runs } = useProjectRuns();
+    const temporaryRuns: RunFixture[] = runs.map((run) => {
+        const common = {
+            id: run.id,
+            name: run.name,
+            datasetId: run.datasetId,
+            created: run.created,
+            temporary: true as const,
+        };
+        return run.status === "Completed"
+            ? { ...common, status: "Completed", concepts: run.concepts }
+            : { ...common, status: run.status };
+    });
+    const project = { ...fixtureProject, runs: [...fixtureProject.runs, ...temporaryRuns] };
     const [notice, setNotice] = useState("");
     const latestCompleted = project.runs
         .filter((run) => run.status === "Completed")

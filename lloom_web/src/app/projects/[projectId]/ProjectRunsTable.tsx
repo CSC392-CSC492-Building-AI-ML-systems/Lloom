@@ -58,7 +58,7 @@ export default function ProjectRunsTable({
                                 </td>
                                 <td className="px-3 py-4">
                                     <span
-                                        className={`inline-block min-w-[100px] rounded-full px-3 py-1 text-center font-medium ${run.status === "Completed" ? "bg-success-surface text-success" : "bg-page text-content-secondary"}`}
+                                        className={`inline-block min-w-[100px] rounded-full px-3 py-1 text-center font-medium ${run.status === "Completed" ? "bg-success-surface text-success" : run.status === "Running" || run.status === "Pending" ? "bg-info-surface text-primary" : run.status === "Failed" || run.status === "Cancelled" ? "bg-surface-subtle text-danger" : "bg-page text-content-secondary"}`}
                                     >
                                         {run.status}
                                     </span>
@@ -68,11 +68,25 @@ export default function ProjectRunsTable({
                                 </td>
                                 <td className="px-3 py-4 whitespace-nowrap text-content-secondary">
                                     <time dateTime={run.created}>
-                                        {dateFormatter.format(new Date(`${run.created}T00:00:00Z`))}
+                                        {dateFormatter.format(
+                                            new Date(
+                                                run.created.length === 10
+                                                    ? `${run.created}T00:00:00Z`
+                                                    : run.created,
+                                            ),
+                                        )}
                                     </time>
                                 </td>
                                 <td className="px-3 py-4 whitespace-nowrap">
-                                    {run.status === "Draft" ? (
+                                    {run.temporary ? (
+                                        <Link
+                                            aria-label={`View progress for ${run.name}`}
+                                            href={`/projects/${project.id}/runs/${encodeURIComponent(run.id)}/progress`}
+                                            className={actionClass}
+                                        >
+                                            View Progress
+                                        </Link>
+                                    ) : run.status === "Draft" ? (
                                         <Link
                                             aria-label={`Resume ${run.name}`}
                                             href={`/projects/${project.id}/runs/new?draft=${encodeURIComponent(run.id)}`}
