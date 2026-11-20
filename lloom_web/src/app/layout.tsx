@@ -31,13 +31,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                         __html: "<style>html:not([data-theme-ready]) body { visibility: visible; }</style>",
                     }}
                 />
-                <Script
-                    id="lloom-theme-init"
-                    strategy="beforeInteractive"
-                    dangerouslySetInnerHTML={{ __html: themeBootstrap }}
-                />
             </head>
             <body className="flex min-h-full flex-col">
+                <Script
+                    id="lloom-theme-init"
+                    strategy="afterInteractive"
+                    dangerouslySetInnerHTML={{ __html: themeBootstrap }}
+                />
                 <ThemeProvider>{children}</ThemeProvider>
             </body>
         </html>

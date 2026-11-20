@@ -1,3 +1,6 @@
+import type { DatasetFixture } from "@/fixtures/projects";
+export type { DatasetFixture } from "@/fixtures/projects";
+
 export const synthesisRoundOptions = [1, 2, 3] as const;
 
 // Frontend draft state, not a backend request contract.
@@ -12,15 +15,6 @@ export type RunConfiguration = {
 };
 
 export type ConfigurationErrors = Partial<Record<keyof RunConfiguration, string>>;
-
-export type DatasetFixture = {
-    id: string;
-    name: string;
-    columns: string[];
-    textColumns: string[];
-    rowCount: number;
-    sampleRows: Record<string, string>[];
-};
 
 export function validateConfiguration(
     configuration: RunConfiguration,

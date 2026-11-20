@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Header from "@/components/Header";
-import { fixtureProject } from "../configure-run.fixtures";
+import { getProjectFixture } from "@/fixtures/projects";
+import { notFound } from "next/navigation";
 import ReviewRun from "./ReviewRun";
 
 export const metadata: Metadata = { title: "Review Run | LLooM Web" };
@@ -11,6 +12,8 @@ export default async function ReviewRunPage({
     params: Promise<{ projectId: string }>;
 }) {
     const { projectId } = await params;
+    const project = getProjectFixture(projectId);
+    if (!project) notFound();
     return (
         <div className="flex min-h-dvh flex-col">
             <Header showSearch={false} />
@@ -26,7 +29,7 @@ export default async function ReviewRunPage({
                         Review Run
                     </h1>
                     <p className="text-base text-content-secondary">
-                        Project: {fixtureProject.name} <span className="text-sm">(fixture)</span>
+                        Project: {project.name} <span className="text-sm">(fixture)</span>
                     </p>
                 </div>
                 <p className="mt-3 text-base text-content-secondary">
@@ -36,7 +39,7 @@ export default async function ReviewRunPage({
                     Fixture preview — project, dataset, provider, and model data is illustrative.
                     Refreshing resets your settings. Nothing is saved or uploaded.
                 </p>
-                <ReviewRun configureHref={`/projects/${encodeURIComponent(projectId)}/runs/new`} />
+                <ReviewRun />
             </main>
         </div>
     );

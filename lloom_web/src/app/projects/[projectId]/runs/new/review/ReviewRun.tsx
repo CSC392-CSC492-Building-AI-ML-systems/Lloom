@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRunConfiguration } from "../RunConfigurationProvider";
-import { datasetFixtures, fixtureModelSettings } from "../configure-run.fixtures";
+import { fixtureModelSettings } from "../configure-run.fixtures";
 import { validateConfiguration } from "../run-configuration";
 import RunWorkflowSteps from "../RunWorkflowSteps";
 
@@ -28,8 +28,14 @@ function SummaryRows({ rows }: { rows: { label: string; value: string }[] }) {
     );
 }
 
-export default function ReviewRun({ configureHref }: { configureHref: string }) {
-    const { configuration } = useRunConfiguration();
+export default function ReviewRun() {
+    const {
+        configuration,
+        datasets: datasetFixtures,
+        projectId,
+        draftQuery,
+    } = useRunConfiguration();
+    const configureHref = `/projects/${encodeURIComponent(projectId)}/runs/new${draftQuery}`;
     const [notice, setNotice] = useState("");
     const errors = validateConfiguration(configuration, datasetFixtures);
     const valid = Object.keys(errors).length === 0;

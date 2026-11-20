@@ -5,7 +5,9 @@ export function isThemePreference(value: unknown): value is ThemePreference {
     return value === "system" || value === "light" || value === "dark";
 }
 
-// Runs in <head> before page content is painted. Storage access may be blocked.
+// The layout hides content until this bootstrap or the provider applies the theme.
+// Use afterInteractive: beforeInteractive can be client-rendered by notFound().
+// Storage access may be blocked.
 export const themeBootstrap = `(()=>{let p="system";try{const v=localStorage.getItem("${themeStorageKey}");if(v==="light"||v==="dark"||v==="system")p=v;}catch{}document.documentElement.classList.toggle("dark",p==="dark"||(p==="system"&&matchMedia("(prefers-color-scheme: dark)").matches));document.documentElement.dataset.themeReady="true";})();`;
 
 let memoryPreference: ThemePreference | undefined;
