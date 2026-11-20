@@ -69,6 +69,31 @@ Frontend architecture, coding conventions, styling guidelines, and expectations 
 
 The frontend's visual design is maintained in [Figma](https://www.figma.com/design/ZD63PswmLrGbgtIn4OulsL/LLooM-Web-UI-Design?node-id=1-2&t=m9eXBtnLz6cpRU9c-1).
 
+## Run progress prototype
+
+Start Run on Review creates a configuration snapshot and opens
+`/projects/[projectId]/runs/[runId]/progress`. `ProjectRunProvider` keeps temporary
+runs in memory while that project layout is mounted, including when returning to
+the Workspace. Refreshing or leaving the project discards them. A lost temporary
+run displays an unavailable message; no state is reconstructed from its URL.
+
+The four visible stages simulate distillation, repeated clustering/synthesis with
+optional automatic review, and document scoring. Timing is fixed demo timing, not
+an estimate of real execution. Cancellation and demo completion stop the timers.
+Concept counts are illustrative (up to six), not generated results. Model metadata
+uses the existing fixture settings, independently of API & Model Settings.
+
+For projects with datasets, reproducible preview URLs are:
+
+- `/projects/1/runs/demo-success/progress`
+- `/projects/1/runs/demo-failure/progress` (fails during the first synthesis round)
+
+Existing completed fixture runs can also be viewed at the progress route; their
+configuration summary uses illustrative defaults because historical configuration
+is not stored in those fixtures. View Completed Results is a completion shortcut
+while running and placeholder feedback afterward. No backend execution, provider
+requests, persistence, or Concept Explorer is implemented.
+
 ## Resources
 
 - [Next.js Documentation](https://nextjs.org/docs)

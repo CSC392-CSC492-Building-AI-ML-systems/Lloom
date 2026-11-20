@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useProjectRuns } from "../../../ProjectRunProvider";
 import { useRunConfiguration } from "../RunConfigurationProvider";
 import { fixtureModelSettings } from "../configure-run.fixtures";
 import { validateConfiguration } from "../run-configuration";
@@ -29,6 +31,8 @@ function SummaryRows({ rows }: { rows: { label: string; value: string }[] }) {
 }
 
 export default function ReviewRun() {
+    const router = useRouter();
+    const { startRun } = useProjectRuns();
     const {
         configuration,
         datasets: datasetFixtures,
@@ -43,8 +47,13 @@ export default function ReviewRun() {
 
     function handleStartRun() {
         if (Object.keys(validateConfiguration(configuration, datasetFixtures)).length) return;
-        setNotice(
-            "Run execution is not implemented. No analysis has started. Your configuration remains available for editing.",
+        const runId = startRun(configuration);
+        if (!runId) {
+            setNotice("The configuration is invalid. Return to Configure Run.");
+            return;
+        }
+        router.push(
+            `/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/progress`,
         );
     }
 
@@ -163,6 +172,10 @@ export default function ReviewRun() {
                 </section>
             )}
             <RunWorkflowSteps currentStep={2} />
+            <p className="mt-3 text-sm text-content-secondary">
+                Start Run opens a temporary simulation. No backend analysis or model requests will
+                run.
+            </p>
             <p role="status" aria-live="polite" className="mt-3 text-sm text-content">
                 {notice}
             </p>
