@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CircleCheck, CircleX, LoaderCircle } from "lucide-react";
 import type { ProjectFixture } from "@/fixtures/projects";
@@ -20,6 +21,9 @@ export default function RunProgress({
     runId: string;
 }) {
     const { runs, openPreview, cancelRun, finishRun } = useProjectRuns();
+    const router = useRouter();
+    const { projectId } = useParams<{ projectId: string }>();
+    const resultsHref = `/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/results`;
     const run = runs.find((item) => item.id === runId) ?? completedFixtureRun(project, runId);
     const [notice, setNotice] = useState("");
     useEffect(() => {
@@ -54,15 +58,9 @@ export default function RunProgress({
             }}
             onComplete={() => {
                 finishRun(run.id);
-                setNotice(
-                    "Demo completion: the simulated run is complete. Concept Explorer is not implemented yet; no analysis was executed and no results page was opened.",
-                );
+                router.push(resultsHref);
             }}
-            onResults={() =>
-                setNotice(
-                    "Concept Explorer is not implemented yet. These are fixture results; no results page was opened.",
-                )
-            }
+            onResults={() => router.push(resultsHref)}
         />
     );
 }
@@ -246,7 +244,7 @@ function ProgressContent({
                             <p className="mt-1 text-xs text-content-secondary">
                                 {active
                                     ? "Prototype demo: complete the simulated run."
-                                    : "Concept Explorer is not implemented yet."}
+                                    : "Open the illustrative fixture results preview."}
                             </p>
                         </div>
                     )}

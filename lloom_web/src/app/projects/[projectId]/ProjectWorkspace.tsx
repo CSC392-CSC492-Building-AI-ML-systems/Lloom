@@ -87,7 +87,7 @@ export default function ProjectWorkspace({ project: fixtureProject }: { project:
                     <p className="mt-2 text-[15px] text-content-secondary">
                         View previous analyses and their results.
                     </p>
-                    <ProjectRunsTable project={project} onUnavailable={setNotice} />
+                    <ProjectRunsTable project={project} />
                 </section>
                 <section aria-labelledby="workspace-datasets-heading" className={cardClass}>
                     <h2 id="workspace-datasets-heading" className={headingClass}>
