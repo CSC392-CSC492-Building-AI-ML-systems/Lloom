@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { allDocumentsSlice, getMatrixCounts } from "@/fixtures/run-results";
 import type { ConceptCounts, DatasetSlice, RunResults } from "@/fixtures/run-results";
 
@@ -6,6 +7,7 @@ export default function ConceptMatrix({
     rows,
     groupingId,
     onGroupingChange,
+    getConceptHref,
     onConcept,
     onCell,
 }: {
@@ -13,6 +15,7 @@ export default function ConceptMatrix({
     rows: ConceptCounts[];
     groupingId: string;
     onGroupingChange: (id: string) => void;
+    getConceptHref: (row: ConceptCounts, slice?: DatasetSlice) => string;
     onConcept: (row: ConceptCounts) => void;
     onCell: (row: ConceptCounts, slice: DatasetSlice, count: number) => void;
 }) {
@@ -99,13 +102,22 @@ export default function ConceptMatrix({
                                     scope="row"
                                     className="px-4 py-2 text-left text-[15px] font-normal"
                                 >
-                                    <button
-                                        type="button"
-                                        onClick={() => onConcept(row)}
-                                        className="min-h-11 rounded text-left text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary"
-                                    >
-                                        {row.name}
-                                    </button>
+                                    {row.kind === "concept" ? (
+                                        <Link
+                                            href={getConceptHref(row)}
+                                            className="inline-flex min-h-11 items-center rounded text-left text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary"
+                                        >
+                                            {row.name}
+                                        </Link>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => onConcept(row)}
+                                            className="min-h-11 rounded text-left text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary"
+                                        >
+                                            {row.name}
+                                        </button>
+                                    )}
                                 </th>
                                 {slices.map((slice, column) => {
                                     const count = counts[index][column];
@@ -115,37 +127,72 @@ export default function ConceptMatrix({
                                             key={slice.id}
                                             className="border-l border-outline text-center"
                                         >
-                                            <button
-                                                type="button"
-                                                aria-label={`${row.name}, ${slice.label}: ${count} matching documents`}
-                                                title={`${count} matching documents`}
-                                                onClick={() => onCell(row, slice, count)}
-                                                className="inline-flex min-h-16 min-w-16 items-center justify-center rounded focus-visible:outline-2 focus-visible:outline-primary"
-                                            >
-                                                <svg
-                                                    aria-hidden="true"
-                                                    width="60"
-                                                    height="60"
-                                                    viewBox="0 0 60 60"
+                                            {row.kind === "concept" ? (
+                                                <Link
+                                                    href={getConceptHref(row, slice)}
+                                                    aria-label={`${row.name}, ${slice.label}: ${count} matching documents`}
+                                                    title={`${count} matching documents`}
+                                                    className="inline-flex min-h-16 min-w-16 items-center justify-center rounded focus-visible:outline-2 focus-visible:outline-primary"
                                                 >
-                                                    <circle
-                                                        cx="30"
-                                                        cy="30"
-                                                        r={radius}
-                                                        className="fill-brand-light"
-                                                    />
-                                                    {!count && (
-                                                        <text
-                                                            x="30"
-                                                            y="35"
-                                                            textAnchor="middle"
-                                                            className="fill-content-secondary text-[13px]"
-                                                        >
-                                                            0
-                                                        </text>
-                                                    )}
-                                                </svg>
-                                            </button>
+                                                    {" "}
+                                                    <svg
+                                                        aria-hidden="true"
+                                                        width="60"
+                                                        height="60"
+                                                        viewBox="0 0 60 60"
+                                                    >
+                                                        <circle
+                                                            cx="30"
+                                                            cy="30"
+                                                            r={radius}
+                                                            className="fill-brand-light"
+                                                        />
+                                                        {!count && (
+                                                            <text
+                                                                x="30"
+                                                                y="35"
+                                                                textAnchor="middle"
+                                                                className="fill-content-secondary text-[13px]"
+                                                            >
+                                                                0
+                                                            </text>
+                                                        )}
+                                                    </svg>
+                                                </Link>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    aria-label={`Outlier, ${slice.label}: ${count} documents`}
+                                                    title={`${count} documents`}
+                                                    onClick={() => onCell(row, slice, count)}
+                                                    className="inline-flex min-h-16 min-w-16 items-center justify-center rounded focus-visible:outline-2 focus-visible:outline-primary"
+                                                >
+                                                    {" "}
+                                                    <svg
+                                                        aria-hidden="true"
+                                                        width="60"
+                                                        height="60"
+                                                        viewBox="0 0 60 60"
+                                                    >
+                                                        <circle
+                                                            cx="30"
+                                                            cy="30"
+                                                            r={radius}
+                                                            className="fill-brand-light"
+                                                        />
+                                                        {!count && (
+                                                            <text
+                                                                x="30"
+                                                                y="35"
+                                                                textAnchor="middle"
+                                                                className="fill-content-secondary text-[13px]"
+                                                            >
+                                                                0
+                                                            </text>
+                                                        )}
+                                                    </svg>
+                                                </button>
+                                            )}
                                         </td>
                                     );
                                 })}
@@ -159,7 +206,7 @@ export default function ConceptMatrix({
             </p>
             <p className="mt-5 text-[13px] text-content-secondary">
                 Select a concept name or bar for details. Select a bubble for matching documents.
-                Detail pages are not implemented yet.
+                Document Details and Outlier Details are not implemented yet.
             </p>
         </section>
     );

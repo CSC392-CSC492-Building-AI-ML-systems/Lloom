@@ -57,6 +57,49 @@ export type ConceptCounts = {
 };
 export const allDocumentsSlice: DatasetSlice = { id: "all", label: "All", kind: "all" };
 
+export type ScoredDocument = { document: ResultDocument; record: ConceptScore };
+export function selectConceptDocuments(
+    results: RunResults,
+    conceptId: string,
+    options: {
+        slice: DatasetSlice;
+        view: "matches" | "non-matches";
+        query: string;
+        sort: "id" | "score";
+    },
+) {
+    const records = new Map(
+        results.scores
+            .filter((record) => record.conceptId === conceptId)
+            .map((record) => [record.documentId, record]),
+    );
+    const query = options.query.trim().toLocaleLowerCase("en-US");
+    const documents = results.documents.filter(
+        (document) =>
+            documentInSlice(document, options.slice) &&
+            (!query ||
+                document.id.toLocaleLowerCase("en-US").includes(query) ||
+                document.text.toLocaleLowerCase("en-US").includes(query)),
+    );
+    const rows: ScoredDocument[] = [];
+    let missing = 0;
+    for (const document of documents) {
+        const record = records.get(document.id);
+        if (!record || record.score === null) {
+            missing++;
+            continue;
+        }
+        const match = record.score >= results.matchThreshold;
+        if (match === (options.view === "matches")) rows.push({ document, record });
+    }
+    rows.sort(
+        (a, b) =>
+            (options.sort === "score" ? (b.record.score ?? 0) - (a.record.score ?? 0) : 0) ||
+            a.document.id.localeCompare(b.document.id, "en", { numeric: true }),
+    );
+    return { rows, missing };
+}
+
 export function documentInSlice(document: ResultDocument, slice: DatasetSlice) {
     if (slice.kind === "all") return true;
     const value = document.metadata[slice.columnId];

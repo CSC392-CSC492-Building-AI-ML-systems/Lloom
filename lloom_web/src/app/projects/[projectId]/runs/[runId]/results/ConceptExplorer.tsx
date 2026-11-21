@@ -1,12 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { useParams, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { ProjectFixture } from "@/fixtures/projects";
-import { createResultFixture, existingRunResults } from "@/fixtures/run-results.fixtures";
 import { getConceptCounts } from "@/fixtures/run-results";
-import type { ConceptCounts, RunResults } from "@/fixtures/run-results";
-import { useProjectRuns } from "../../../ProjectRunProvider";
+import type { ConceptCounts, DatasetSlice, RunResults } from "@/fixtures/run-results";
+import { useRunResults } from "./useRunResults";
+import {
+    conceptHref,
+    readResultQuery,
+    resetResultQuery,
+    updateResultQuery,
+} from "./results-navigation";
 import ConceptOverviewChart from "./ConceptOverviewChart";
 import ConceptMatrix from "./ConceptMatrix";
 
@@ -21,28 +27,7 @@ export default function ConceptExplorer({
     project: ProjectFixture;
     runId: string;
 }) {
-    const { runs } = useProjectRuns();
-    const temporary = runs.find((run) => run.id === runId && run.projectId === project.id);
-    const fixture = project.runs.find((run) => run.id === runId);
-    const status = temporary?.status ?? fixture?.status;
-    // UI notices live in the child component, separately from fixture construction.
-    const results = (() => {
-        if (temporary?.status === "Completed") {
-            const dataset = project.datasets.find((dataset) => dataset.id === temporary.datasetId);
-            return dataset
-                ? createResultFixture(
-                      project.id,
-                      runId,
-                      dataset,
-                      temporary.configuration.textColumn,
-                      temporary.concepts,
-                  )
-                : undefined;
-        }
-        if (fixture?.status === "Completed") return existingRunResults(project, runId);
-        return undefined;
-    })();
-    const name = temporary?.name ?? fixture?.name ?? "Temporary run";
+    const { results, status, temporary, name } = useRunResults(project, runId);
     return (
         <div className="space-y-6">
             <nav aria-label="Breadcrumb" className="text-[15px]">
@@ -119,12 +104,17 @@ export default function ConceptExplorer({
 }
 
 function ExplorerContent({ results, datasetName }: { results: RunResults; datasetName: string }) {
-    const [groupingId, setGroupingId] = useState(results.groupings[0]?.id ?? "all");
+    const search = useSearchParams();
+    const { projectId } = useParams<{ projectId: string }>();
+    const filters = readResultQuery(search, results);
+    const groupingId = filters.groupingId;
+    const getHref = (row: ConceptCounts, slice?: DatasetSlice) =>
+        conceptHref(projectId, results.runId, row.id, groupingId, slice?.id ?? "all");
     const [notice, setNotice] = useState("");
     const rows = useMemo(() => getConceptCounts(results), [results]);
     function onConcept(row: ConceptCounts) {
         setNotice(
-            `${row.name}: ${row.documentIds.length} matching documents. Concept Details and document views are not implemented yet. These are illustrative fixtures.`,
+            `Outlier: ${row.documentIds.length} documents. Outlier Details is not implemented. Outlier is a derived category, not a generated concept.`,
         );
     }
     const summary = [
@@ -186,7 +176,21 @@ function ExplorerContent({ results, datasetName }: { results: RunResults; datase
             >
                 {notice}
             </p>
-            {!results.concepts.length || !results.documents.length ? (
+            {filters.error ? (
+                <section className={cardClass}>
+                    <h2 className="text-xl font-medium text-danger">Invalid result filters</h2>
+                    <p role="alert" className="mt-3 text-content-secondary">
+                        {filters.error}
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => resetResultQuery(results)}
+                        className={`${linkClass} mt-4`}
+                    >
+                        Reset filters
+                    </button>
+                </section>
+            ) : !results.concepts.length || !results.documents.length ? (
                 <section className={cardClass}>
                     <h2 className="text-xl font-medium">No concepts to explore</h2>
                     <p className="mt-3 text-content-secondary">
@@ -207,7 +211,11 @@ function ExplorerContent({ results, datasetName }: { results: RunResults; datase
                             Number of documents matching each generated concept, with Outlier shown
                             separately.
                         </p>
-                        <ConceptOverviewChart rows={rows} onSelect={onConcept} />
+                        <ConceptOverviewChart
+                            rows={rows}
+                            onSelect={onConcept}
+                            getConceptHref={(row) => getHref(row)}
+                        />
                         <p className="mt-4 text-[13px] text-content-secondary">
                             {results.concepts.length} generated concepts are shown alongside
                             Outlier. Documents can match multiple concepts; bars are not mutually
@@ -224,17 +232,25 @@ function ExplorerContent({ results, datasetName }: { results: RunResults; datase
                         rows={rows}
                         groupingId={groupingId}
                         onGroupingChange={(id) => {
-                            setGroupingId(id);
+                            updateResultQuery({
+                                groupBy: id,
+                                slice: null,
+                                view: null,
+                                q: null,
+                                sort: null,
+                                page: null,
+                            });
                             setNotice(
                                 id === "all"
                                     ? "Matrix now shows All Documents."
                                     : "Matrix now groups by synthetic Likes. This is not an original dataset field.",
                             );
                         }}
+                        getConceptHref={getHref}
                         onConcept={onConcept}
                         onCell={(row, slice, count) =>
                             setNotice(
-                                `${row.name}, ${slice.label}: ${count} matching documents. Matching Documents and Document Details are not implemented yet; no detail page was opened.`,
+                                `Outlier, ${slice.label}: ${count} documents. Outlier Details is not implemented yet; no detail page was opened.`,
                             )
                         }
                     />

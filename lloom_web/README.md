@@ -121,9 +121,34 @@ to the existing dataset fixtures. Survey previews offer All Documents. Matrix
 bubble area represents counts, including accessible exact counts. All charts and
 matrices support local horizontal scrolling and keyboard controls.
 
-Run Settings, Concept Details, Matching Documents, and Document Details remain
-accessible placeholder feedback. No editing, search, sorting, real execution,
-authentication, persistence, or additional results pages are implemented.
+Run Settings, Outlier Details, and Document Details remain accessible placeholder
+feedback. No editing, real execution, authentication, or persistence is implemented.
+
+## Concept Details prototype
+
+Concept names and bars open
+`/projects/[projectId]/runs/[runId]/results/concepts/[conceptId]`. Matrix cells also
+carry their exact slice. Explorer grouping is restored by the Back to Concept
+Explorer link. Outlier stays a derived-category placeholder; it has no invented
+concept definition or score.
+
+Matches and Non-matches share one page. Validated URL parameters are `groupBy`,
+`slice`, `view` (`matches` / `non-matches`), `q` (case-insensitive ID/text search),
+`sort` (`id` ascending / `score` descending with ID tie-breaking), and `page`.
+Native browser history updates filters without reloading the project provider.
+Search replaces history entries; view, slice, sort, and pagination changes push
+entries. Filtering and sorting reset pagination to page one. Invalid parameters
+show an explicit reset action instead of broadening the selection silently.
+
+The overview's match total is global; Document Scores counts reflect its current
+view, slice, and search. Five documents are shown per page. Missing score records
+and null scores are excluded from both views and reported separately; zero remains
+a valid non-match. Description, criteria, and representative excerpts come from
+the existing shared fixtures. Repeated example excerpts are shown only once.
+
+Document View displays accessible placeholder feedback. No document overlay is
+implemented yet. Existing completed fixtures survive refresh, while temporary
+run details require the same in-memory project session as Concept Explorer.
 
 ## Resources
 
