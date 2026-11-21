@@ -1,11 +1,14 @@
+import Link from "next/link";
 import type { ConceptCounts } from "@/fixtures/run-results";
 
 export default function ConceptOverviewChart({
     rows,
     onSelect,
+    getConceptHref,
 }: {
     rows: ConceptCounts[];
     onSelect: (row: ConceptCounts) => void;
+    getConceptHref: (row: ConceptCounts) => string;
 }) {
     const ordered = [...rows].sort((a, b) => b.documentIds.length - a.documentIds.length);
     const maximum = Math.max(6, ...rows.map((row) => row.documentIds.length));
@@ -53,14 +56,9 @@ export default function ConceptOverviewChart({
                     {ordered.map((row) => {
                         const count = row.documentIds.length;
                         const height = (count / ceiling) * 220;
-                        return (
-                            <button
-                                key={row.id}
-                                type="button"
-                                aria-label={`${row.name}: ${count} matching documents. Open concept details placeholder.`}
-                                onClick={() => onSelect(row)}
-                                className="relative min-w-[150px] flex-1 rounded px-3 text-center hover:bg-info-surface/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
-                            >
+                        const content = (
+                            <>
+                                {" "}
                                 <svg
                                     aria-hidden="true"
                                     viewBox="0 0 80 260"
@@ -89,6 +87,28 @@ export default function ConceptOverviewChart({
                                 >
                                     {row.name}
                                 </span>
+                            </>
+                        );
+                        const className =
+                            "relative min-w-[150px] flex-1 rounded px-3 text-center hover:bg-info-surface/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary";
+                        return row.kind === "concept" ? (
+                            <Link
+                                key={row.id}
+                                href={getConceptHref(row)}
+                                aria-label={`${row.name}: ${count} matching documents. Open concept details.`}
+                                className={className}
+                            >
+                                {content}
+                            </Link>
+                        ) : (
+                            <button
+                                key={row.id}
+                                type="button"
+                                aria-label={`Outlier: ${count} documents. Outlier Details placeholder.`}
+                                onClick={() => onSelect(row)}
+                                className={className}
+                            >
+                                {content}
                             </button>
                         );
                     })}
