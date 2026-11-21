@@ -80,8 +80,10 @@ run displays an unavailable message; no state is reconstructed from its URL.
 The four visible stages simulate distillation, repeated clustering/synthesis with
 optional automatic review, and document scoring. Timing is fixed demo timing, not
 an estimate of real execution. Cancellation and demo completion stop the timers.
-Concept counts are illustrative (up to six), not generated results. Model metadata
-uses the existing fixture settings, independently of API & Model Settings.
+Concept counts are illustrative and capped by the selected dataset's curated
+catalogue (18 survey themes or 9 political themes), not generated results. An
+unsupported text column has no result preview. Model metadata uses the existing
+fixture settings, independently of API & Model Settings.
 
 For projects with datasets, reproducible preview URLs are:
 
@@ -90,9 +92,38 @@ For projects with datasets, reproducible preview URLs are:
 
 Existing completed fixture runs can also be viewed at the progress route; their
 configuration summary uses illustrative defaults because historical configuration
-is not stored in those fixtures. View Completed Results is a completion shortcut
-while running and placeholder feedback afterward. No backend execution, provider
-requests, persistence, or Concept Explorer is implemented.
+is not stored in those fixtures. View Completed Results completes an active
+simulation and opens its illustrative Concept Explorer preview. Completed runs
+open that preview directly. No backend execution, provider requests, or persistence
+is implemented.
+
+## Concept Explorer prototype
+
+Completed runs open `/projects/[projectId]/runs/[runId]/results` from Workspace or
+Progress. Existing completed fixture runs survive refresh; simulated results
+require their completed in-memory run. Unknown/cross-project IDs are rejected.
+Unfinished runs and unsupported dataset/text-column combinations have explicit
+unavailable states, rather than unrelated fallback results.
+
+`src/fixtures/run-results.ts` defines concepts, full documents, metadata, ordinal
+agreement scores, evidence/rationale, and slice definitions. Curated fictional
+records are built deterministically in `run-results.fixtures.ts`. These records
+are not parsed from dataset files or generated from seed phrases/model settings.
+The default match threshold is 1. Chart counts, matrix cells, and Outliers share
+the same scores. Documents can match multiple concepts; Outlier is derived and is
+excluded from the generated concept count. Missing scores are distinct from zero
+and do not establish that a document is an Outlier. The final concept in multi-
+concept previews intentionally has zero matches.
+
+Political previews offer **Likes (synthetic)** numeric slices and **All Documents**.
+Synthetic Likes exists only in the result fixture records; no Likes field is added
+to the existing dataset fixtures. Survey previews offer All Documents. Matrix
+bubble area represents counts, including accessible exact counts. All charts and
+matrices support local horizontal scrolling and keyboard controls.
+
+Run Settings, Concept Details, Matching Documents, and Document Details remain
+accessible placeholder feedback. No editing, search, sorting, real execution,
+authentication, persistence, or additional results pages are implemented.
 
 ## Resources
 

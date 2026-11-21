@@ -10,13 +10,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
     timeZone: "UTC",
 });
 
-export default function ProjectRunsTable({
-    project,
-    onUnavailable,
-}: {
-    project: ProjectFixture;
-    onUnavailable: (message: string) => void;
-}) {
+export default function ProjectRunsTable({ project }: { project: ProjectFixture }) {
     if (!project.runs.length)
         return (
             <p className="mt-4 text-[15px] text-content-secondary">
@@ -78,7 +72,7 @@ export default function ProjectRunsTable({
                                     </time>
                                 </td>
                                 <td className="px-3 py-4 whitespace-nowrap">
-                                    {run.temporary ? (
+                                    {run.temporary && run.status !== "Completed" ? (
                                         <Link
                                             aria-label={`View progress for ${run.name}`}
                                             href={`/projects/${project.id}/runs/${encodeURIComponent(run.id)}/progress`}
@@ -95,18 +89,13 @@ export default function ProjectRunsTable({
                                             Resume
                                         </Link>
                                     ) : (
-                                        <button
-                                            type="button"
+                                        <Link
                                             aria-label={`View results for ${run.name}`}
+                                            href={`/projects/${project.id}/runs/${encodeURIComponent(run.id)}/results`}
                                             className={actionClass}
-                                            onClick={() =>
-                                                onUnavailable(
-                                                    `Results viewing is not implemented yet. No results were opened for ${run.name}.`,
-                                                )
-                                            }
                                         >
                                             View Results
-                                        </button>
+                                        </Link>
                                     )}
                                 </td>
                             </tr>

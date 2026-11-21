@@ -1,4 +1,5 @@
 import type { ProjectFixture } from "@/fixtures/projects";
+import { previewConceptCount } from "@/fixtures/run-results.fixtures";
 import type { RunConfiguration } from "./new/run-configuration";
 import { createDefaultConfiguration, fixtureModelSettings } from "./new/configure-run.fixtures";
 
@@ -132,7 +133,11 @@ export function completeRun(run: SimulatedRun): SimulatedRun {
         status: "Completed",
         operationIndex: run.operations.length,
         dueAt: null,
-        concepts: Math.min(Number(run.configuration.targetConcepts), 6),
+        concepts: previewConceptCount(
+            run.datasetId,
+            run.configuration.textColumn,
+            Number(run.configuration.targetConcepts),
+        ),
     };
 }
 export function stageStatus(run: SimulatedRun, stage: Stage) {
