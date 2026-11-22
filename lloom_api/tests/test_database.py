@@ -14,10 +14,13 @@ from app.db import (
     get_run,
     initialize_database,
     open_connection,
+    update_run_state,
+    update_run_status,
 )
 
 
 TIMESTAMP = "2026-11-18T12:00:00Z"
+LATER = "2026-11-18T13:00:00Z"
 
 
 
@@ -229,5 +232,74 @@ def test_initializing_twice_preserves_data(tmp_path):
     finally:
         connection.close()
 
+def test_update_run_status_changes_the_status_and_remembers_the_old_one(tmp_path):
+    _, connection = make_connection(tmp_path)
+
+    try:
+        insert_run(connection)
+
+        update_run_status(
+            connection,
+            run_id="run-1",
+            status="scoring",
+            previous_status="awaiting_approval",
+            updated_at=LATER,
+        )
+
+        run = get_run(connection, "run-1")
+
+        assert run["status"] == "scoring"
+        assert run["previous_status"] == "awaiting_approval"
+        assert run["updated_at"] == LATER
+    finally:
+        connection.close()
 
 
+def test_update_run_state_keeps_saved_values_when_passed_none(tmp_path):
+    _, connection = make_connection(tmp_path)
+    new_pickle = pickle.dumps({"session": "after scoring"})
+
+    try:
+        # insert_run saved a generation estimate and a pickle, but no score estimate
+        insert_run(connection)
+
+        # A scoring job: new score estimate and pickle, no generation estimate
+        update_run_state(
+            connection,
+            run_id="run-1",
+            generation_estimate=None,
+            score_estimate={"cost": 0.5},
+            session_pickle=new_pickle,
+            cost_so_far=0.25,
+            elapsed_seconds=12.0,
+            updated_at=LATER,
+        )
+
+        run = get_run(connection, "run-1")
+
+        assert json.loads(run["generation_estimate_json"]) == {"cost": 0.01, "seconds": 10}
+        assert json.loads(run["score_estimate_json"]) == {"cost": 0.5}
+        assert run["session_pickle"] == new_pickle
+        assert run["cost_so_far"] == 0.25
+        assert run["elapsed_seconds"] == 12.0
+        assert run["updated_at"] == LATER
+
+        # A later save that only reports cost: nothing already saved may be erased
+        update_run_state(
+            connection,
+            run_id="run-1",
+            generation_estimate=None,
+            score_estimate=None,
+            session_pickle=None,
+            cost_so_far=0.75,
+            elapsed_seconds=20.0,
+            updated_at=LATER,
+        )
+
+        run = get_run(connection, "run-1")
+
+        assert json.loads(run["score_estimate_json"]) == {"cost": 0.5}
+        assert run["session_pickle"] == new_pickle
+        assert run["cost_so_far"] == 0.75
+    finally:
+        connection.close()

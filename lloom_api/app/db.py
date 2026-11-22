@@ -6,19 +6,19 @@ from fastapi import Request
 
 # Possible Run Statuses
 RUN_STATUS = (
-    "waiting_to_approve",
+    "awaiting_approval",
     "generating",
-    "got_concepts_ready"
+    "concepts_ready",
     "scoring",
     "scored",
-    "fail",
+    "failed",
 )
 
 # Possible Job Statuses
 JOB_STATUS = (
     "running",
     "succeeded",
-    "fail",
+    "failed",
 )
 
 #Types of Jobs
@@ -145,7 +145,7 @@ def initialize_database(path: str) -> None:
 
 #The fastapi dependency gnerator, gives each request its own database connections,
 # also handling the cleanup 
-def get_db(reqt: Request) -> Generator[sqlite3.Connection, None, None]:
+def get_db(request: Request) -> Generator[sqlite3.Connection, None, None]:
     """
     Fast API runs this function, then route can recieve it with,
     connection: sqlite.Connection = Depends(get_db)
@@ -156,8 +156,8 @@ def get_db(reqt: Request) -> Generator[sqlite3.Connection, None, None]:
     try:
         yield connection
         connection.commit()
-    except BaseException(): #Checks if any exceptions ocurr, cleanup
-        connection.rollback
+    except Exception: #Checks if any exceptions ocurr, cleanup
+        connection.rollback()
         raise
 
     finally:
@@ -343,6 +343,44 @@ def update_run_status(
         """,
         (status, previous_status, updated_at, run_id),
     )
+
+
+def update_run_state(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str,
+    generation_estimate: dict[str, Any] | None,
+    score_estimate: dict[str, Any] | None,
+    session_pickle: bytes | None,
+    cost_so_far: float,
+    elapsed_seconds: float,
+    updated_at: str,
+) -> None:
+    # COALESCE(?, column) keeps the saved value when we pass None,
+    # so a score job can save its pickle without erasing the generation estimate
+    connection.execute(
+        """
+        UPDATE runs
+        SET generation_estimate_json = COALESCE(?, generation_estimate_json),
+            score_estimate_json = COALESCE(?, score_estimate_json),
+            session_pickle = COALESCE(?, session_pickle),
+            cost_so_far = ?,
+            elapsed_seconds = ?,
+            updated_at = ?
+        WHERE id = ?
+        """,
+        (
+            json.dumps(generation_estimate) if generation_estimate is not None else None,
+            json.dumps(score_estimate) if score_estimate is not None else None,
+            session_pickle,
+            cost_so_far,
+            elapsed_seconds,
+            updated_at,
+            run_id,
+        ),
+    )
+
+
 
 
 #Functions for JOBs
