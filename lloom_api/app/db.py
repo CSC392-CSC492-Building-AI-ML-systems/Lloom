@@ -1,6 +1,7 @@
 import json
 import sqlite3
 from collections.abc import Generator
+from contextlib import contextmanager
 from typing import Any
 from fastapi import Request
 
@@ -168,15 +169,24 @@ def get_db(request: Request) -> Generator[sqlite3.Connection, None, None]:
     connection: sqlite.Connection = Depends(get_db)
     """
 
-    connection = open_connection(request.app.state.db_path)
+    # transaction() commits on success, rolls back on error, and always closes
+    with transaction(request.app.state.db_path) as connection:
+        yield connection
+
+
+# Opens a connection from a path: commits if the block succeeds, rolls back if it
+# raises, and always closes. get_db uses it for requests, and code with no request
+# (like a background worker) uses it directly:  with transaction(path) as connection:
+@contextmanager
+def transaction(path: str) -> Generator[sqlite3.Connection, None, None]:
+    connection = open_connection(path)
 
     try:
         yield connection
         connection.commit()
-    except Exception: #Checks if any exceptions ocurr, cleanup
+    except Exception:
         connection.rollback()
         raise
-
     finally:
         connection.close()
 
