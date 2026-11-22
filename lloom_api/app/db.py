@@ -4,30 +4,30 @@ from collections.abc import Generator
 from typing import Any
 from fastapi import Request
 
-# Possible Run Statuses
+# Possible Run Statuses (the same words the frontend shows)
 RUN_STATUS = (
-    "awaiting_approval",
-    "generating",
-    "concepts_ready",
-    "scoring",
-    "scored",
-    "failed",
+    "Draft",
+    "Pending",
+    "Running",
+    "Completed",
+    "Failed",
+    "Cancelled",
 )
 
-# Possible Job Statuses
+# Possible Job Statuses (a job is never a Draft)
 JOB_STATUS = (
-    "running",
-    "succeeded",
-    "failed",
+    "Pending",
+    "Running",
+    "Completed",
+    "Failed",
+    "Cancelled",
 )
 
-#Types of Jobs
-
-JOB_TYPE = (
-    "generate",
-    "score",
+# Possible Dataset Formats
+DATASET_FORMAT = (
+    "CSV",
+    "JSON",
 )
-
 
 
 #Functions that help us build database pipeline
@@ -47,7 +47,8 @@ def open_connection(path:str) -> sqlite3.Connection:
 
 
 # this is intializing the SQLite Schema for LLOOM
-# the Schema has been oranizied as (projects → datasets → runs → jobs)
+# the Schema has been oranizied as (projects → datasets → runs → jobs),
+# plus a single-row settings table that belongs to the whole app
 def initialize_database(path: str) -> None:
     """Create the SQLite schema without changing existing data."""
     connection = open_connection(path)
@@ -67,6 +68,7 @@ def initialize_database(path: str) -> None:
                 id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL,
                 name TEXT NOT NULL,
+                format TEXT NOT NULL CHECK (format IN ('CSV', 'JSON')),
                 file_blob BLOB NOT NULL,
                 columns_json TEXT NOT NULL DEFAULT '[]',
                 text_columns_json TEXT NOT NULL DEFAULT '[]',
@@ -81,15 +83,16 @@ def initialize_database(path: str) -> None:
                 id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL,
                 dataset_id TEXT NOT NULL,
+                name TEXT NOT NULL,
                 config_json TEXT NOT NULL DEFAULT '{}',
                 status TEXT NOT NULL CHECK (
                     status IN (
-                        'awaiting_approval',
-                        'generating',
-                        'concepts_ready',
-                        'scoring',
-                        'scored',
-                        'failed'
+                        'Draft',
+                        'Pending',
+                        'Running',
+                        'Completed',
+                        'Failed',
+                        'Cancelled'
                     )
                 ),
                 params_json TEXT NOT NULL DEFAULT '{}',
@@ -108,10 +111,16 @@ def initialize_database(path: str) -> None:
             CREATE TABLE IF NOT EXISTS jobs (
                 id TEXT PRIMARY KEY,
                 run_id TEXT NOT NULL,
-                kind TEXT NOT NULL CHECK (kind IN ('generate', 'score')),
                 status TEXT NOT NULL CHECK (
-                    status IN ('running', 'succeeded', 'failed')
+                    status IN (
+                        'Pending',
+                        'Running',
+                        'Completed',
+                        'Failed',
+                        'Cancelled'
+                    )
                 ),
+                cancel_requested INTEGER NOT NULL DEFAULT 0,
                 step TEXT,
                 done INTEGER NOT NULL DEFAULT 0,
                 total INTEGER NOT NULL DEFAULT 0,
@@ -119,6 +128,14 @@ def initialize_database(path: str) -> None:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY (run_id) REFERENCES runs(id)
+            );
+
+            -- One row only: id is always 1, so a second row is rejected
+            CREATE TABLE IF NOT EXISTS settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                api_key TEXT NOT NULL DEFAULT ''
             );
 
             CREATE INDEX IF NOT EXISTS projects_last_opened_at_idx
@@ -220,6 +237,7 @@ def create_dataset(
     dataset_id: str,
     project_id: str,
     name: str,
+    format: str,
     file_blob: bytes,
     columns: list[str],
     text_columns: list[str],
@@ -234,6 +252,7 @@ def create_dataset(
             id,
             project_id,
             name,
+            format,
             file_blob,
             columns_json,
             text_columns_json,
@@ -242,12 +261,13 @@ def create_dataset(
             id_column,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             dataset_id,
             project_id,
             name,
+            format,
             file_blob,
             json.dumps(columns),
             json.dumps(text_columns),
@@ -276,6 +296,7 @@ def create_run(
     run_id: str,
     project_id: str,
     dataset_id: str,
+    name: str,
     config: dict[str, Any],
     status: str,
     params: dict[str, Any],
@@ -291,6 +312,7 @@ def create_run(
             id,
             project_id,
             dataset_id,
+            name,
             config_json,
             status,
             params_json,
@@ -300,12 +322,13 @@ def create_run(
             created_at,
             updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             run_id,
             project_id,
             dataset_id,
+            name,
             json.dumps(config),
             status,
             json.dumps(params),
@@ -389,7 +412,6 @@ def create_job(
     *,
     job_id: str,
     run_id: str,
-    kind: str,
     status: str,
     step: str | None,
     done: int,
@@ -403,7 +425,6 @@ def create_job(
         INSERT INTO jobs (
             id,
             run_id,
-            kind,
             status,
             step,
             done,
@@ -412,12 +433,11 @@ def create_job(
             created_at,
             updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             job_id,
             run_id,
-            kind,
             status,
             step,
             done,
@@ -453,4 +473,26 @@ def update_job_progress(
         WHERE id = ?
         """,
         (status, step, done, total, error, updated_at, job_id),
+    )
+
+
+# Helper functions for settings table, which has only one row (id=1)
+
+def get_settings(connection: sqlite3.Connection) -> sqlite3.Row | None:
+    return connection.execute(
+        "SELECT * FROM settings WHERE id = 1",
+    ).fetchone()
+
+
+def save_settings(connection: sqlite3.Connection, *, provider: str, model: str, api_key: str) -> None:
+    connection.execute(
+        """
+        INSERT INTO settings (id, provider, model, api_key)
+        VALUES (1, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            provider = excluded.provider,
+            model = excluded.model,
+            api_key = excluded.api_key
+        """,
+        (provider, model, api_key),
     )
