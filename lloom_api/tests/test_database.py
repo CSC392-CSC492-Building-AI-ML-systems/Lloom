@@ -304,8 +304,8 @@ def test_update_run_state_keeps_saved_values_when_passed_none(tmp_path):
             generation_estimate=None,
             score_estimate=None,
             session_pickle=None,
-            cost_so_far=0.75,
-            elapsed_seconds=20.0,
+            cost_so_far=None,
+            elapsed_seconds=None,
             updated_at=LATER,
         )
 
@@ -313,7 +313,8 @@ def test_update_run_state_keeps_saved_values_when_passed_none(tmp_path):
 
         assert json.loads(run["score_estimate_json"]) == {"cost": 0.5}
         assert run["session_pickle"] == new_pickle
-        assert run["cost_so_far"] == 0.75
+        assert run["cost_so_far"] == 0.25
+        assert run["elapsed_seconds"] == 12.0
     finally:
         connection.close()
 

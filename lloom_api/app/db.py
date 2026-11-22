@@ -385,8 +385,8 @@ def update_run_state(
     generation_estimate: dict[str, Any] | None,
     score_estimate: dict[str, Any] | None,
     session_pickle: bytes | None,
-    cost_so_far: float,
-    elapsed_seconds: float,
+    cost_so_far: float | None,
+    elapsed_seconds: float | None,
     updated_at: str,
 ) -> None:
     # COALESCE(?, column) keeps the saved value when we pass None,
@@ -397,8 +397,8 @@ def update_run_state(
         SET generation_estimate_json = COALESCE(?, generation_estimate_json),
             score_estimate_json = COALESCE(?, score_estimate_json),
             session_pickle = COALESCE(?, session_pickle),
-            cost_so_far = ?,
-            elapsed_seconds = ?,
+            cost_so_far = COALESCE(?, cost_so_far),
+            elapsed_seconds = COALESCE(?, elapsed_seconds),
             updated_at = ?
         WHERE id = ?
         """,
