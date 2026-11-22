@@ -8,7 +8,9 @@ from typing import Any
 
 from app.db import (
     create_job,
+    get_job,
     get_run,
+    is_cancel_requested,
     transaction,
     update_job_progress,
     update_run_state,
@@ -19,6 +21,23 @@ from app.db import (
 # progress(step, done, total) is what LLooM's gen() and score() call
 Progress = Callable[[str, int, int], None]
 Work = Callable[[Any, Progress], Awaitable[None]]
+
+
+# LLooM reports its own step names. The frontend shows five stages, so each
+# step is mapped to one of them. An unknown step is shown as it is.
+STAGES = {
+    "Distill-filter": "Distill",
+    "Distill-summarize": "Distill",
+    "Cluster": "Cluster",
+    "Synthesize": "Synthesize",
+    "Review": "Synthesize",
+    "Score": "Score",
+}
+
+
+# Raised inside the progress callback to stop a job that was asked to cancel
+class JobCancelled(Exception):
+    pass
 
 
 def now() -> str:
@@ -112,48 +131,102 @@ class JobManager:
 
     # Runs in the worker thread, when it is this job's turn
     def _work(self, job_id: str, run_id: str, fn: Work) -> None:
-        time = now()
+        # Nothing may escape this method: an exception here would vanish inside
+        # the executor's Future and leave the job Running forever. Every way out
+        # ends with the job and the run in a final status.
+        try:
+            # Cancelled while it was still waiting in the queue: never start it
+            with transaction(self.db_path) as connection:
+                cancelled = is_cancel_requested(connection, job_id)
+            if cancelled:
+                raise JobCancelled()
 
-        with transaction(self.db_path) as connection:
-            update_job_progress(
-                connection,
-                job_id=job_id,
-                status="Running",
-                step=None,
-                done=0,
-                total=0,
-                error=None,
-                updated_at=time,
-            )
-            update_run_status(
-                connection,
-                run_id=run_id,
-                status="Running",
-                previous_status="Pending",
-                updated_at=time,
-            )
-
-        # Short connections on purpose: none is held open while fn runs (it can
-        # take minutes), so other requests are never blocked by this job
-        with transaction(self.db_path) as connection:
-            session = load_session(connection, run_id, self.get_models())
-
-        # fn is async, and this thread has no event loop, so asyncio.run supplies one
-        asyncio.run(fn(session, self._progress(job_id)))
-
-        # Only reached if fn finished without an error
-        with transaction(self.db_path) as connection:
-            save_session(connection, run_id, session)
-
-    # Builds the progress(step, done, total) callback for one job
-    def _progress(self, job_id: str) -> Progress:
-        def progress(step: str, done: int, total: int) -> None:
+            time = now()
             with transaction(self.db_path) as connection:
                 update_job_progress(
                     connection,
                     job_id=job_id,
                     status="Running",
-                    step=step,
+                    step=None,
+                    done=0,
+                    total=0,
+                    error=None,
+                    updated_at=time,
+                )
+                update_run_status(
+                    connection,
+                    run_id=run_id,
+                    status="Running",
+                    previous_status="Pending",
+                    updated_at=time,
+                )
+
+            # Short connections on purpose: none is held open while fn runs (it can
+            # take minutes), so other requests are never blocked by this job
+            with transaction(self.db_path) as connection:
+                session = load_session(connection, run_id, self.get_models())
+
+            # fn is async, and this thread has no event loop, so asyncio.run supplies one
+            asyncio.run(fn(session, self._progress(job_id)))
+
+            # Only reached if fn finished without an error. The session is saved
+            # in the same transaction that marks the job Completed, so they
+            # can't disagree.
+            with transaction(self.db_path) as connection:
+                save_session(connection, run_id, session)
+                self._finish(connection, job_id, run_id, "Completed", None)
+        except JobCancelled:
+            # The saved session is left as it was before the job started
+            with transaction(self.db_path) as connection:
+                self._finish(connection, job_id, run_id, "Cancelled", None)
+        except Exception as error:
+            with transaction(self.db_path) as connection:
+                self._finish(connection, job_id, run_id, "Failed", str(error))
+
+    # Puts the job and its run in a final status. The job keeps the step, done
+    # and total it last reported, so the frontend can still show where it stopped.
+    def _finish(
+        self,
+        connection,
+        job_id: str,
+        run_id: str,
+        status: str,
+        error: str | None,
+    ) -> None:
+        time = now()
+        job = get_job(connection, job_id)
+        update_job_progress(
+            connection,
+            job_id=job_id,
+            status=status,
+            step=job["step"],
+            done=job["done"],
+            total=job["total"],
+            error=error,
+            updated_at=time,
+        )
+        update_run_status(
+            connection,
+            run_id=run_id,
+            status=status,
+            previous_status=get_run(connection, run_id)["status"],
+            updated_at=time,
+        )
+
+    # Builds the progress(step, done, total) callback for one job
+    def _progress(self, job_id: str) -> Progress:
+        def progress(step: str, done: int, total: int) -> None:
+            with transaction(self.db_path) as connection:
+                # LLooM calls this at the start of each step, so this is the
+                # moment a cancel request can take effect
+                if is_cancel_requested(connection, job_id):
+                    raise JobCancelled()
+
+                update_job_progress(
+                    connection,
+                    job_id=job_id,
+                    status="Running",
+                    step=STAGES.get(step, step),
                     done=done,
                     total=total,
                     error=None,

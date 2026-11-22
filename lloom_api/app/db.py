@@ -486,6 +486,35 @@ def update_job_progress(
     )
 
 
+# Cancelling is a request: the route sets the flag, and the worker reads it
+# the next time LLooM reports progress. A job that is already finished can't
+# be cancelled, so the flag is only set for Pending and Running jobs.
+# Returns True if the flag was set.
+def request_job_cancel(
+    connection: sqlite3.Connection,
+    *,
+    job_id: str,
+    updated_at: str,
+) -> bool:
+    cursor = connection.execute(
+        """
+        UPDATE jobs
+        SET cancel_requested = 1, updated_at = ?
+        WHERE id = ? AND status IN ('Pending', 'Running')
+        """,
+        (updated_at, job_id),
+    )
+    return cursor.rowcount > 0
+
+
+def is_cancel_requested(connection: sqlite3.Connection, job_id: str) -> bool:
+    row = connection.execute(
+        "SELECT cancel_requested FROM jobs WHERE id = ?",
+        (job_id,),
+    ).fetchone()
+    return row is not None and row["cancel_requested"] == 1
+
+
 # Helper functions for settings table, which has only one row (id=1)
 
 def get_settings(connection: sqlite3.Connection) -> sqlite3.Row | None:
