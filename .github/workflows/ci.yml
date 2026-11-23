@@ -59,6 +59,8 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: lloom_api/pyproject.toml
-      - run: pip install -e "lloom_api[dev]"
+          cache-dependency-path: |
+            lloom_api/pyproject.toml
+            text_lloom/pyproject.toml
+      - run: pip install -e text_lloom -e "lloom_api[dev]"
       - run: pytest lloom_api/tests
