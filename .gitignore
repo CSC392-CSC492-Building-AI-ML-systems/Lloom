@@ -1,7 +1,10 @@
 # Python
+.venv/
 text_lloom/.venv/
 *.egg-info/
 __pycache__/
+# lloom_api local SQLite database
+lloom_api/*.db
 
 # Environment
 .env
@@ -14,3 +17,5 @@ node_modules/
 
 *.DS_Store
 CLAUDE.md
+.claude/
+.playwright-mcp/

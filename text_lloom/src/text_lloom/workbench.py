@@ -14,21 +14,25 @@ import requests
 from IPython.display import display
 
 import nltk
-nltk.download('punkt_tab', quiet=True)
 
 # Local imports
 if __package__ is None or __package__ == '':
     # uses current directory visibility
     from concept_induction import *
     from concept import Concept
-    from llm import Model, EmbedModel, OpenAIModel, OpenAIEmbedModel
+    from llm import Model, EmbedModel, OpenAIModel, OpenAIEmbedModel, build_models, read_env_settings
 else:
     # uses current package visibility
     from .concept_induction import *
     from .concept import Concept
-    from .llm import Model, EmbedModel, OpenAIModel, OpenAIEmbedModel
+    from .llm import Model, EmbedModel, OpenAIModel, OpenAIEmbedModel, build_models, read_env_settings
 
 # WORKBENCH class ================================
+def has_price(model):
+    # Custom models may lack `cost`; OpenAIModel with no known price has cost=None
+    return getattr(model, "cost", None) is not None
+
+
 class lloom:
     def __init__(
         self,
@@ -42,6 +46,17 @@ class lloom:
         debug: bool = False,
     ):
         self.debug = debug  # Whether to run in debug mode
+
+        # If LLM_BASE_URL is set, models that are not specified use that OpenAI-compatible API
+        # (ex: Gemini, Ollama). The settings are read from environment variables (see read_env_settings).
+        if None in (distill_model, cluster_model, synth_model, score_model):
+            env_settings = read_env_settings(os.environ)
+            if env_settings is not None:
+                env_models = build_models(env_settings)
+                distill_model = distill_model or env_models["distill_model"]
+                cluster_model = cluster_model or env_models["cluster_model"]
+                synth_model = synth_model or env_models["synth_model"]
+                score_model = score_model or env_models["score_model"]
 
         # Add defaults if distill_model, etc. are not specified
         def get_environ_api_key():
@@ -206,26 +221,26 @@ class lloom:
         est_concept_tokens = 40  # Tokens for one generated concept JSON
 
         est_cost = {}
-        
+        quotes_tokens_per_doc = params["filter_n_quotes"] * est_quote_tokens
+        bullets_tokens_per_doc = params["summ_n_bullets"] * est_bullet_tokens
+
         model = self.distill_model
-        if hasattr(model, "cost"):
+        if has_price(model):
             # Filter: generate filter_n_quotes for each doc
             filter_in_tokens = np.sum([model.count_tokens_fn(model, filter_prompt + doc) for doc in self.in_df[self.doc_col].tolist()])
-            quotes_tokens_per_doc = params["filter_n_quotes"] * est_quote_tokens 
             filter_out_tokens = quotes_tokens_per_doc * len(self.in_df)
             est_cost["distill_filter"] = model.cost_fn(model, (filter_in_tokens, filter_out_tokens))
 
             # Summarize: create n_bullets for each doc
             summ_prompt_tokens = model.count_tokens_fn(model, summarize_prompt)
             summ_in_tokens = np.sum([(summ_prompt_tokens + quotes_tokens_per_doc) for _ in range(len(self.in_df))])
-            bullets_tokens_per_doc = params["summ_n_bullets"] * est_bullet_tokens
             summ_out_tokens = bullets_tokens_per_doc * len(self.in_df)
             est_cost["distill_summarize"] = model.cost_fn(model, (summ_in_tokens, summ_out_tokens))
         else:
             print(f"Cost estimates not available for distill model `{model.name}`")
 
         model = self.cluster_model
-        if hasattr(model, "cost"):
+        if has_price(model):
             # Cluster: embed each bullet point
             cluster_cost = model.cost[0]
             cluster_tokens = bullets_tokens_per_doc * len(self.in_df)
@@ -234,7 +249,7 @@ class lloom:
             print(f"Cost estimates not available for cluster model `{model.name}`")
 
         model = self.synth_model
-        if hasattr(model, "cost"):
+        if has_price(model):
             # Synthesize: create n_concepts for each of the est_n_clusters
             n_bullets_per_cluster = (params["summ_n_bullets"] * len(self.in_df)) / est_n_clusters
             synth_prompt_tokens = model.count_tokens_fn(model, synthesize_prompt)
@@ -249,16 +264,18 @@ class lloom:
         else:
             print(f"Cost estimates not available for synth model `{model.name}`")
         
+        total_cost = sum(c[0] + c[1] for c in est_cost.values())
         if len(est_cost) > 0:
-            total_cost = np.sum([c[0] + c[1] for c in est_cost.values()])
             print(f"\n\n{self.bold_txt('Estimated cost')}: ${np.round(total_cost, 2)}")
             print("**Please note that this is only an approximate cost estimate**")
 
             if verbose:
                 print(f"\nEstimated cost breakdown:")
                 for step_name, cost in est_cost.items():
-                    total_cost = np.sum(cost)
-                    print(f"\t{step_name}: {total_cost:0.4f}")
+                    print(f"\t{step_name}: {np.sum(cost):0.4f}")
+
+        available = all(has_price(m) for m in (self.distill_model, self.cluster_model, self.synth_model))
+        return {"steps": est_cost, "total": total_cost, "available": available}
 
     # Estimate cost of scoring for the given number of concepts
     def estimate_score_cost(self, n_concepts=None, batch_size=5, get_highlights=True, verbose=False, df_to_score=None):
@@ -274,12 +291,13 @@ class lloom:
         est_concept_tokens = 20  # Tokens for concept name + prompt
         est_score_json_tokens = 100  # Tokens for score JSON for one document
             
+        if df_to_score is None:
+            df_to_score = self.df_to_score
+
         model = self.score_model
-        if hasattr(model, "cost"):
+        if has_price(model):
             score_prompt_tokens = model.count_tokens_fn(model, score_prompt)
             n_batches = math.ceil(len(df_to_score) / batch_size)
-            if df_to_score is None:
-                df_to_score = self.df_to_score
 
             all_doc_tokens = np.sum([model.count_tokens_fn(model, doc) for doc in df_to_score[self.doc_col].tolist()])  # Tokens to encode all documents
             score_in_tokens = all_doc_tokens + (n_batches * (score_prompt_tokens + est_concept_tokens))
@@ -295,8 +313,10 @@ class lloom:
                 print(f"\nEstimated cost breakdown:")
                 for step_name, cost in zip(["Input", "Output"], est_cost):
                     print(f"\t{step_name}: {cost:0.4f}")
+            return {"steps": {"score": est_cost}, "total": sum(est_cost), "available": True}
         else:
             print(f"Cost estimates not available for score model `{model.name}`")
+            return {"steps": {}, "total": 0, "available": False}
 
     def auto_suggest_parameters(self, sample_size=None, target_n_concepts=20, debug=False):
         # Suggests concept generation parameters based on rough heuristics
@@ -307,6 +327,11 @@ class lloom:
             sample_docs = self.in_df[self.doc_col].tolist()
 
         # Get number of sentences in each document
+        # sent_tokenize needs punkt_tab; download it here (not at import) and only if missing
+        try:
+            nltk.data.find("tokenizers/punkt_tab")
+        except LookupError:
+            nltk.download("punkt_tab", quiet=True)
         n_sents = [len(sent_tokenize(doc)) for doc in sample_docs]
         avg_n_sents = int(np.median(n_sents))
         if debug:
@@ -332,7 +357,7 @@ class lloom:
         models = ["distill_model", "cluster_model", "synth_model", "score_model"]
         for model_name in models:
             model = getattr(self, model_name)
-            if not hasattr(model, "cost"):
+            if not has_price(model):
                 print(f"Token and cost summaries not available for {model_name} `{model.name}`")
             else:
                 has_cost = True
@@ -397,7 +422,7 @@ class lloom:
         
 
     # HELPER FUNCTIONS ================================
-    async def gen(self, seed=None, params=None, n_synth=1, custom_prompts=None, auto_review=True, debug=True):
+    async def gen(self, seed=None, params=None, n_synth=1, custom_prompts=None, auto_review=True, debug=True, progress=None):
         if params is None:
             params = self.auto_suggest_parameters(debug=debug)
             if debug:
@@ -428,9 +453,22 @@ class lloom:
 
         # Run concept generation
         filter_n_quotes = params["filter_n_quotes"]
+
+        # Optional progress(step, done, total), called as each step starts (e.g. so a server can show a progress bar)
+        run_filter = (filter_n_quotes > 1) and (custom_prompts["distill_filter"] is not None)
+        run_summarize = custom_prompts["distill_summarize"] is not None
+        total_steps = run_filter + run_summarize + n_synth * (3 if auto_review else 2)
+        done_steps = 0
+        def report(step_name):
+            nonlocal done_steps
+            if progress is not None:
+                progress(step_name, done_steps, total_steps)
+            done_steps += 1
+
         if (filter_n_quotes > 1) and (custom_prompts["distill_filter"] is not None):
             step_name = "Distill-filter"
             self.print_step_name(step_name)
+            report(step_name)
             with self.spinner_wrapper() as spinner:
                 df_filtered = await distill_filter(
                     text_df=self.in_df, 
@@ -455,6 +493,7 @@ class lloom:
         if (custom_prompts["distill_summarize"] is not None):
             step_name = "Distill-summarize"
             self.print_step_name(step_name)
+            report(step_name)
             with self.spinner_wrapper() as spinner:
                 df_bullets = await distill_summarize(
                     text_df=self.df_filtered, 
@@ -485,6 +524,7 @@ class lloom:
 
             step_name = "Cluster"
             self.print_step_name(step_name)
+            report(step_name)
             with self.spinner_wrapper() as spinner:
                 df_cluster = await cluster(
                     text_df=df_cluster_in, 
@@ -500,6 +540,7 @@ class lloom:
             
             step_name = "Synthesize"
             self.print_step_name(step_name)
+            report(step_name)
             with self.spinner_wrapper() as spinner:
                 df_concepts, synth_logs = await synthesize(
                     cluster_df=df_cluster, 
@@ -516,34 +557,38 @@ class lloom:
                 )
                 spinner.text = "Done"
                 spinner.ok("✅")
+
+
             if debug:
                 print(synth_logs)
 
-                # Review current concepts (remove low-quality, merge similar)
-                if auto_review:
-                    step_name = "Review"
-                    self.print_step_name(step_name)
-                    with self.spinner_wrapper() as spinner:
-                        _, df_concepts, review_logs = await review(
-                            concepts=self.concepts, 
-                            concept_df=df_concepts, 
-                            concept_col_prefix=concept_col_prefix, 
-                            model=self.synth_model, 
-                            seed=seed,
-                            sess=self,
-                            return_logs=True,
-                        )
-                        spinner.text = "Done"
-                        spinner.ok("✅")
-                    if debug:
-                        print(review_logs)
-
-                self.concept_history[i] = self.concepts
+            # Review current concepts (remove low-quality, merge similar)
+            if auto_review:
+                step_name = "Review"
+                self.print_step_name(step_name)
+                report(step_name)
+                with self.spinner_wrapper() as spinner:
+                    _, df_concepts, review_logs = await review(
+                        concepts=self.concepts, 
+                        concept_df=df_concepts, 
+                        concept_col_prefix=concept_col_prefix, 
+                        model=self.synth_model, 
+                        seed=seed,
+                        sess=self,
+                        return_logs=True,
+                    )
+                    spinner.text = "Done"
+                    spinner.ok("✅")
                 if debug:
-                    # Print results
-                    print(f"\n\n{self.highlight_txt('Synthesize', color='blue')} {i + 1}: (n={len(self.concepts)} concepts)")
-                    for k, c in self.concepts.items():
-                        print(f'- Concept {k}:\n\t{c.name}\n\t- Prompt: {c.prompt}')
+                    print(review_logs)
+            self.concept_history[i] = self.concepts
+           
+                
+            if debug:
+                # Print results
+                print(f"\n\n{self.highlight_txt('Synthesize', color='blue')} {i + 1}: (n={len(self.concepts)} concepts)")
+                for k, c in self.concepts.items():
+                    print(f'- Concept {k}:\n\t{c.name}\n\t- Prompt: {c.prompt}')
             
             # Update synthesize params for next iteration
             df_concepts["synth_doc_col"] = df_concepts[f"{concept_col_prefix}_name"] + ": " + df_concepts[f"{concept_col_prefix}_prompt"]
@@ -552,7 +597,7 @@ class lloom:
             synth_n_concepts = math.floor(synth_n_concepts * 0.75)
         print("✅ Done with concept generation!")
 
-    def __concepts_to_json(self):
+    def get_concepts_json(self):
         concept_dict = {c_id: c.to_dict() for c_id, c in self.concepts.items()}
         # Get examples from example IDs
         for c_id, c in concept_dict.items():
@@ -564,7 +609,7 @@ class lloom:
         return json.dumps(concept_dict)
     
     def select(self):
-        concepts_json = self.__concepts_to_json()
+        concepts_json = self.get_concepts_json()
         w = get_select_widget(concepts_json)
         self.select_widget = w
         return w
@@ -581,7 +626,7 @@ class lloom:
         # Handle if selection failed
         if len(selected_concepts) == 0:
             concept_ids = list(self.concepts.keys())
-            selected_concepts = random.sample(concept_ids, max_concepts)
+            selected_concepts = random.sample(concept_ids, min(max_concepts, len(concept_ids)))
 
         # Activate only the selected concepts
         for c_id in selected_concepts:
@@ -600,13 +645,35 @@ class lloom:
     def __set_all_concepts_active(self):
         for c_id, c in self.concepts.items():
             c.active = True
-        # Update widget
-        self.select_widget = self.select()
+        self.__refresh_widget()
+
+    def __refresh_widget(self):
+        # Rebuild the select widget so its checkboxes match `active`; skipped when no widget was opened (e.g. on a server)
+        if self.select_widget is not None:
+            self.select()
+
+    def set_active(self, concept_ids):
+        # Make exactly these concepts active, all others inactive
+        unknown = set(concept_ids) - set(self.concepts)
+        if unknown:
+            raise ValueError(f"Unknown concept IDs: {sorted(unknown)}")
+        for c_id, c in self.concepts.items():
+            c.active = c_id in concept_ids
+        self.__refresh_widget()
+
+    def update_concept(self, c_id, name=None, prompt=None):
+        # Edit a concept; its old scores no longer match, so drop them and let the next score() redo it
+        c = self.concepts[c_id]
+        if name is not None:
+            c.name = name
+        if prompt is not None:
+            c.prompt = prompt
+        self.results.pop(c_id, None)
 
     # Score the specified concepts
     # If c_ids is None, only score the concepts that are active
     # If score_all is True, set all concepts as active and score all concepts
-    async def score(self, c_ids=None, score_all=False, batch_size=1, get_highlights=True, ignore_existing=True, df=None, debug=True):
+    async def score(self, c_ids=None, score_all=False, batch_size=1, get_highlights=True, ignore_existing=True, df=None, debug=True, progress=None):
         concepts = {}
         if score_all:
             self.__set_all_concepts_active()
@@ -655,6 +722,7 @@ class lloom:
             get_highlights=get_highlights,
             sess=self,
             threshold=1.0,
+            progress=progress,
         )
         score_df = self.__escape_unicode(score_df)
 
@@ -746,18 +814,30 @@ class lloom:
     # - norm_by: str (how to normalize scores: "concept" or "slice")
     # - export_df: bool (whether to return a dataframe for export)
     def vis(self, cols_to_show=[], slice_col=None, max_slice_bins=5, slice_bounds=None, show_highlights=True, norm_by=None, export_df=False, include_outliers=False):
-        active_concepts = self.__get_active_concepts()
-        score_df = self.get_score_df()
+        widget, matrix_df, item_df, item_df_wide = visualize(**self.__get_vis_args(cols_to_show, slice_col, max_slice_bins, slice_bounds, show_highlights, norm_by))
+        if export_df:
+            return self.__get_df_for_export(item_df, include_outliers=include_outliers)
 
-        widget, matrix_df, item_df, item_df_wide = visualize(
+        return widget
+
+    # Returns the data the visualization shows, as a dict, without building a widget.
+    # Takes the same parameters as vis (except export_df and include_outliers, which only apply to notebook exports)
+    # Output: dict with the keys data, data_items, data_items_wide, metadata (JSON strings), slice_col and norm_by
+    def vis_data(self, cols_to_show=[], slice_col=None, max_slice_bins=5, slice_bounds=None, show_highlights=True, norm_by=None):
+        vis_dict, matrix_df, item_df, item_df_wide = build_vis_data(**self.__get_vis_args(cols_to_show, slice_col, max_slice_bins, slice_bounds, show_highlights, norm_by))
+        return vis_dict
+
+    def __get_vis_args(self, cols_to_show, slice_col, max_slice_bins, slice_bounds, show_highlights, norm_by):
+        # Arguments shared by vis (via visualize) and vis_data
+        return dict(
             in_df=self.in_df,
-            score_df=score_df,
+            score_df=self.get_score_df(),
             doc_col=self.doc_col,
             doc_id_col=self.doc_id_col,
             score_col="score",
             df_filtered=self.df_filtered,
             df_bullets=self.df_bullets,
-            concepts=active_concepts,
+            concepts=self.__get_active_concepts(),
             cols_to_show=cols_to_show,
             slice_col=slice_col,
             max_slice_bins=max_slice_bins,
@@ -765,10 +845,6 @@ class lloom:
             show_highlights=show_highlights,
             norm_by=norm_by,
         )
-        if export_df:
-            return self.__get_df_for_export(item_df, include_outliers=include_outliers)
-        
-        return widget
 
     def export_df(self, include_outliers=False):
         return self.vis(export_df=True, include_outliers=include_outliers)
@@ -848,9 +924,7 @@ class lloom:
         # Add concept
         c = Concept(name=name, prompt=prompt, example_ids=ex_ids, active=True)
         self.concepts[c.id] = c
-
-        # Update widget
-        self.select_widget = self.select()
+        self.__refresh_widget()
 
         # Run scoring
         cur_score_df = await self.score(c_ids=[c.id], get_highlights=get_highlights, debug=debug)

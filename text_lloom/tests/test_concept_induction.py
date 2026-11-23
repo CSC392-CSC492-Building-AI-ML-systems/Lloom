@@ -1,8 +1,10 @@
 # Pins the current behavior of the small pure helpers in concept_induction.py.
+import json
+import math
+
 import pandas as pd
 
 from text_lloom.concept_induction import (
-    NAN_SCORE,
     clean_item_id,
     clean_score,
     edit_concept,
@@ -16,6 +18,7 @@ from text_lloom.concept_induction import (
     parse_tf_answer,
     refine,
     remove_emojis,
+    build_vis_data,
 )
 
 HIGHLIGHT = "<span style='background-color: rgba(130, 193, 251, 0.5)'>"
@@ -32,10 +35,12 @@ def test_json_load():
 
 def test_parse_bucketed_score():
     assert parse_bucketed_score("A") == 1.0
+    assert parse_bucketed_score("B") == 0.75
     assert parse_bucketed_score("C") == 0.5
+    assert parse_bucketed_score("D") == 0.25
     assert parse_bucketed_score("E") == 0.0
-    assert parse_bucketed_score("B because it fits") == 0.75  # only first letter is used
-    assert parse_bucketed_score("Z") == NAN_SCORE
+    assert parse_bucketed_score("B because it fits") == 0.75
+    assert math.isnan(parse_bucketed_score("Z"))
 
 
 def test_parse_tf_answer():
@@ -116,3 +121,14 @@ def test_edit_concept_only_changes_given_fields():
     concepts = {"c1": {"name": "old", "prompt": "p", "example_ids": ["1"]}}
     out = edit_concept(concepts, "c1", new_name="new")
     assert out["c1"] == {"name": "new", "prompt": "p", "example_ids": ["1"]}
+
+
+def test_build_vis_data_returns_the_six_values_the_matrix_reads(vis_inputs):
+    v = vis_inputs
+    vis_dict, matrix_df, item_df, item_df_wide = build_vis_data(
+        v.in_df, v.score_df, "text", "doc_id", "score", v.df_filtered, v.df_bullets, v.concepts,
+    )
+    assert set(vis_dict) == {"data", "data_items", "data_items_wide", "metadata", "slice_col", "norm_by"}
+    assert vis_dict["slice_col"] == "" and vis_dict["norm_by"] == ""  # unset options become empty strings
+    # One matrix cell per concept: how many documents match it (doc 3 matches nothing, so it is an "Outlier")
+    assert {cell["concept"]: cell["n"] for cell in json.loads(vis_dict["data"])} == {"Dogs": 1, "Cats": 1, "Outlier": 1}

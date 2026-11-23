@@ -23,6 +23,7 @@ import asyncio
 from hdbscan import HDBSCAN
 import umap
 
+
 # Local imports
 if __package__ is None or __package__ == '':
     # uses current directory visibility
@@ -39,11 +40,17 @@ else:
 
 # CONSTANTS ================================
 NAN_SCORE = 0  # Numerical score to use in place of NaN values for matrix viz
+FAILED_SCORE = float("nan")  # Score for docs with no usable LLM answer (0.0 is a real "no match")
+FAILED_RATIONALE = "LLM response missing or unparseable"
 OUTLIER_CRITERIA = "Did the example not match any of the above concepts?"
 SCORE_DF_OUT_COLS = ["doc_id", "text", "concept_id", "concept_name", "concept_prompt", "score", "rationale", "highlight", "concept_seed"]
 
 
 # HELPER functions ================================
+def warn_dropped(step, n_failed, total):
+    if n_failed > 0:
+        print(f"WARNING {step}: {n_failed}/{total} LLM responses failed and were dropped")
+
 
 def json_load(s, top_level_key=None):
     def get_top_level_key(d):
@@ -120,6 +127,82 @@ def filter_empty_rows(df, text_col_name):
     df_out = df[df[text_col_name].apply(lambda x: len(x) > 0)]
     return df_out
 
+
+
+
+
+
+
+
+
+
+
+
+
+# HELPER functions ================================
+
+def _norm_id(x):
+    return str(x).strip()
+
+
+def _numeric_id_formatter(s):
+    # converts 1.0 -> 1, and 0001 -> 1, cleanning unesscessary 0's and positions
+    #Also checks if input is a numeric value, returning None if not
+
+    try: 
+        f = float(s)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(f) or f != int(f):
+        return None
+    return str(int(f))
+
+def _has_leading_zeros(s):
+    s = s.lstrip("+-")
+    return len(s.split(".")[0]) > 1 and s.startswith("0")
+
+def resolve_doc_id(ret_id,canon_id):
+    """
+    Map an LLM-returned example_id onto one dataframe ID.
+    Returns the original dataframe ID value, or None if unmatched/unknown.
+    """
+    canon_id = list(canon_id)
+    s = _norm_id(ret_id)
+
+    exact = [cid for cid in canon_id if _norm_id(cid) == s]
+    if len(exact) == 1:
+        return exact[0]
+    if len(exact) > 1:
+        return None
+
+    n = _numeric_id_formatter(s)
+    if n is None:
+        return None
+
+    num = [cid for cid in canon_id if _numeric_id_formatter(_norm_id(cid)) == n]
+    if len(num) != 1:
+        return None
+
+    if _has_leading_zeros(s) or _has_leading_zeros(_norm_id(num[0])):
+        return None
+
+    return num[0]
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # CORE functions ================================
 
 # Input: 
@@ -155,12 +238,16 @@ async def distill_filter(text_df, doc_col, doc_id_col, model, n_quotes=3, prompt
 
     # Process results
     ex_ids = [ex_id for ex_id in text_df[doc_id_col].tolist()]
+    n_failed = 0
     for ex_id, res in zip(ex_ids, res_text):
         cur_filtered_list = json_load(res, top_level_key="relevant_quotes")
         if cur_filtered_list is not None:
             cur_filtered = "\n".join(cur_filtered_list)
             filtered_ex.append(cur_filtered)
             rows.append([ex_id, cur_filtered])
+        else:
+            n_failed += 1
+    warn_dropped("Distill-filter", n_failed, len(res_text))
     quote_df = pd.DataFrame(rows, columns=[doc_id_col, doc_col])
     
     save_progress(sess, quote_df, step_name="Distill-filter", start=start, tokens=tokens, model=model)
@@ -209,12 +296,16 @@ async def distill_summarize(text_df, doc_col, doc_id_col, model, n_bullets="2-4"
     res_text, tokens = await multi_query_gpt_wrapper(prompt_template, arg_dicts, model)
 
     # Process results
+    n_failed = 0
     for ex_id, res in zip(all_ex_ids, res_text):
         cur_bullets_list = json_load(res, top_level_key="bullets")
         if cur_bullets_list is not None:
             for bullet in cur_bullets_list:
                 # Expand each bullet into its own row
                 rows.append([ex_id, bullet])
+        else:
+            n_failed += 1
+    warn_dropped("Distill-summarize", n_failed, len(res_text))
     bullet_df = pd.DataFrame(rows, columns=[doc_id_col, doc_col])
 
     save_progress(sess, bullet_df, step_name="Distill-summarize", start=start, tokens=tokens, model=model)
@@ -368,6 +459,7 @@ async def synthesize(cluster_df, doc_col, doc_id_col, model, cluster_id_col="clu
     concepts = {}
     rows = []
     logs = ""
+    n_failed = 0
     for cur_cluster_id, res in zip(cluster_ids, res_text):
         cur_concepts = json_load(res, top_level_key="patterns")
         if cur_concepts is not None:
@@ -396,6 +488,9 @@ async def synthesize(cluster_df, doc_col, doc_id_col, model, cluster_id_col="clu
             logs += cur_log
             if verbose:
                 print(cur_log)
+        else:
+            n_failed += 1
+    warn_dropped("Synthesize", n_failed, len(res_text))
     # doc_id, text, concept_id, concept_name, concept_prompt
     concept_df = pd.DataFrame(rows, columns=[doc_id_col, doc_col, concept_col_prefix, f"{concept_col_prefix}_name", f"{concept_col_prefix}_prompt", "seed"])
 
@@ -429,6 +524,24 @@ def get_merge_results(merged):
         cur_out = f"\t{orig_concepts} --> {m['merged_theme_name']}: {m['merged_theme_prompt']}"
         out += cur_out + "\n"
     return out
+
+def load_review_list(res, key, step, is_valid=lambda x: isinstance(x, str)):
+    # Review only refines concepts: a bad reply skips it rather than losing the whole run
+    parsed = json_load(res, top_level_key=key)
+    if not isinstance(parsed, list):
+        print(f"WARNING {step}: LLM response missing or unparseable, skipping this step")
+        return []
+    valid = [x for x in parsed if is_valid(x)]
+    if len(valid) < len(parsed):
+        print(f"WARNING {step}: ignored {len(parsed) - len(valid)}/{len(parsed)} malformed entries")
+    return valid
+
+def is_valid_merge(m):
+    if not isinstance(m, dict):
+        return False
+    themes = m.get("original_themes")
+    return (isinstance(themes, list) and len(themes) == 2 and all(isinstance(t, str) for t in themes)
+            and isinstance(m.get("merged_theme_name"), str) and isinstance(m.get("merged_theme_prompt"), str))
 
 # Input: concept_df (columns: doc_id, text, concept_id, concept_name, concept_prompt)
 # Parameters: n_concepts
@@ -490,7 +603,7 @@ async def review_remove(concepts, concept_df, concept_col_prefix, model, seed, s
 
     # Process results
     res = res_text[0]
-    concepts_to_remove = json_load(res, top_level_key="remove")
+    concepts_to_remove = load_review_list(res, "remove", "Review-remove")
 
     if concept_df is not None:
         concept_df_out = concept_df.copy()
@@ -538,7 +651,7 @@ async def review_merge(concepts, concept_df, concept_col_prefix, model, sess):
 
     # Process results
     res = res_text[0]
-    concepts_to_merge = json_load(res, top_level_key="merge")
+    concepts_to_merge = load_review_list(res, "merge", "Review-merge", is_valid=is_valid_merge)
 
     if concept_df is not None:
         concept_df_out = concept_df.copy()
@@ -551,10 +664,7 @@ async def review_merge(concepts, concept_df, concept_col_prefix, model, sess):
     c_ids_to_remove = []
     for merge_result in concepts_to_merge:
         orig_concepts = merge_result["original_themes"]
-        # Only allow merging pairs
-        if len(orig_concepts) != 2:
-            continue
-        
+
         # Don't allow duplicates (in prior merge pairs)
         for orig_concept in orig_concepts:
             if orig_concept in concepts_to_remove:
@@ -608,7 +718,7 @@ async def review_select(concepts, max_concepts, model, sess):
 
     # Process results
     res = res_text[0]
-    selected_concept_names = json_load(res, top_level_key="selected")
+    selected_concept_names = load_review_list(res, "selected", "Review-select")
 
     selected_concepts = []
     for c_id, c in concepts.items():
@@ -655,11 +765,28 @@ def parse_bucketed_score(x):
         "D": 0.25,
         "E": 0.0,
     }
-    if len(x) > 1:
-        x = x[0]
-    if x not in answer_scores.keys():
-        return NAN_SCORE
-    return answer_scores[x]
+    if not isinstance(x, str):
+        return FAILED_SCORE
+
+    # Parse letter options
+    letter_match = re.match(r"\W*(?:(?:answer|option)\W*)?([a-e])(?![a-z])", x, re.IGNORECASE)
+    if letter_match:
+        return answer_scores[letter_match.group(1).upper()]
+
+    # 2) Parse Lables
+    label_to_letter = [
+        ("strongly disagree", "E"),
+        ("neither agree nor disagree", "C"),
+        ("strongly agree", "A"),
+        ("disagree", "D"),
+        ("agree", "B"),
+    ]
+    x_lower = x.lower()
+    for label, letter in label_to_letter:
+        if label in x_lower:
+            return answer_scores[letter]
+
+    return FAILED_SCORE
 
 def get_score_df(res, in_df, concept, concept_id, text_col, doc_id_col, get_highlights):
     # Cols: doc_id, text, concept_id, concept_name, concept_prompt, score, highlight
@@ -669,15 +796,33 @@ def get_score_df(res, in_df, concept, concept_id, text_col, doc_id_col, get_high
     concept_seed = concept.seed
     if res_dict is not None:
         rows = []
+        canon_ids = in_df[doc_id_col].tolist()
         for ex in res_dict:
             if "answer" in ex:
                 ans = parse_bucketed_score(ex["answer"])
             else:
-                ans = NAN_SCORE
+                ans = FAILED_SCORE
             
             if "example_id" in ex:
-                doc_id = ex["example_id"]
+                doc_id = resolve_doc_id(ex["example_id"],canon_ids)
+                #text_list = in_df[in_df[doc_id_col] == doc_id][text_col].tolist()
+
+                #Adds id checking, unlike before where it tested the doc, by checking if
+                # it is a real ID 
+                if doc_id is None:
+                    print(
+                        "get_score_df: invalid, could not resolve "
+                        f"example_id {ex['example_id']!r} for concept {concept_name!r}; "
+                        f"doc score returns to {NAN_SCORE}"
+                    )
+                    continue
+
                 text_list = in_df[in_df[doc_id_col] == doc_id][text_col].tolist()
+
+
+
+
+
                 if len(text_list) > 0:
                     # Document is in the dataset
                     text = text_list[0]
@@ -686,6 +831,8 @@ def get_score_df(res, in_df, concept, concept_id, text_col, doc_id_col, get_high
                         rationale = ex["rationale"]
                     else:
                         rationale = ""   # Set rationale to empty string
+                    if math.isnan(ans):
+                        rationale = FAILED_RATIONALE
 
                     if get_highlights and ("quote" in ex):
                         row = [doc_id, text, concept_id, concept_name, concept_prompt, ans, rationale, ex["quote"], concept_seed]
@@ -710,8 +857,8 @@ def get_empty_score_df(in_df, concept, concept_id, text_col, doc_id_col):
     out_df["concept_id"] = concept_id
     out_df["concept_name"] = concept_name
     out_df["concept_prompt"] = concept_prompt
-    out_df["score"] = NAN_SCORE
-    out_df["rationale"] = ""
+    out_df["score"] = FAILED_SCORE
+    out_df["rationale"] = FAILED_RATIONALE
     out_df["highlight"] = ""
     out_df["concept_seed"] = concept.seed
     return out_df[SCORE_DF_OUT_COLS]
@@ -769,7 +916,7 @@ async def score_helper(concept, batch_i, concept_id, df, text_col, doc_id_col, m
 #   --> text could be original, filtered (quotes), and/or summarized (bullets)
 # Parameters: threshold
 # Output: score_df (columns: doc_id, text, concept_id, concept_name, concept_prompt, score, highlight)
-async def score_concepts(text_df, text_col, doc_id_col, concepts, model, batch_size=5, get_highlights=False, sess=None, threshold=1.0):
+async def score_concepts(text_df, text_col, doc_id_col, concepts, model, batch_size=5, get_highlights=False, sess=None, threshold=1.0, progress=None):
     # Scoring operates on "text" column for each concept
     start = time.time()
 
@@ -779,6 +926,19 @@ async def score_concepts(text_df, text_col, doc_id_col, concepts, model, batch_s
 
     text_df[doc_id_col] = text_df[doc_id_col].astype(str)
     tasks = [score_helper(concept, concept_i, concept_id, text_df, text_col, doc_id_col, model, batch_size, get_highlights, sess=sess, threshold=threshold) for concept_i, (concept_id, concept) in enumerate(concepts.items())]
+
+    # Optional progress(step, done, total): once up front, then as each concept finishes
+    if progress is not None:
+        n_done = 0
+        async def report_when_done(task):
+            nonlocal n_done
+            result = await task
+            n_done += 1
+            progress("Score", n_done, len(tasks))
+            return result
+        progress("Score", 0, len(tasks))
+        tasks = [report_when_done(t) for t in tasks]
+
     score_dfs = await tqdm_asyncio.gather(*tasks, file=sys.stdout)
 
     # Combine score_dfs
@@ -1353,7 +1513,7 @@ def prep_vis_dfs(df, score_df, doc_id_col, doc_col, score_col, df_filtered, df_b
 
     return matrix_df, item_df, item_df_wide, metadata_dict
 
-# Generates the in-notebook visualization for concept induction results
+# Builds the data for the concept matrix visualization (no widget needed)
 #
 # Input:
 # - in_df: DataFrame (includes columns: doc_id_col, doc_col)
@@ -1373,7 +1533,12 @@ def prep_vis_dfs(df, score_df, doc_id_col, doc_col, score_col, df_filtered, df_b
 # - show_highlights: boolean (whether to show highlights)
 # - norm_by: string (column name to normalize by; either "slice" or "concept")
 # - debug: boolean (whether to print debug statements)
-def visualize(in_df, score_df, doc_col, doc_id_col, score_col, df_filtered, df_bullets, concepts, cols_to_show=[], slice_col=None, max_slice_bins=None, slice_bounds=None, show_highlights=False, norm_by=None, debug=False):
+#
+# Output: tuple (vis_dict, matrix_df, item_df, item_df_wide)
+# - vis_dict: dict with the six values the matrix view reads: data, data_items, data_items_wide,
+#   metadata (JSON strings), slice_col and norm_by (strings, "" if not set)
+def build_vis_data(in_df, score_df, doc_col, doc_id_col, score_col, df_filtered, df_bullets, concepts, cols_to_show=[], slice_col=None, max_slice_bins=None, slice_bounds=None, show_highlights=False, norm_by=None, debug=False):
+    cols_to_show = list(cols_to_show)  # prep_vis_dfs adds slice_col to this list, which would change the shared default
     matrix_df, item_df, item_df_wide, metadata_dict = prep_vis_dfs(in_df, score_df, doc_id_col, doc_col, score_col, df_filtered, df_bullets, concepts, cols_to_show=cols_to_show, slice_col=slice_col, max_slice_bins=max_slice_bins, slice_bounds=slice_bounds,show_highlights=show_highlights, norm_by=norm_by, debug=debug)
 
     data = matrix_df.to_json(orient='records')
@@ -1384,14 +1549,22 @@ def visualize(in_df, score_df, doc_col, doc_id_col, score_col, df_filtered, df_b
         slice_col = ""
     if norm_by is None:
         norm_by = ""
-    w = MatrixWidget(
-        data=data, 
-        data_items=data_items,
-        data_items_wide=data_items_wide, 
-        metadata=md,
-        slice_col=slice_col,
-        norm_by=norm_by,
-    )
+    vis_dict = {
+        "data": data,
+        "data_items": data_items,
+        "data_items_wide": data_items_wide,
+        "metadata": md,
+        "slice_col": slice_col,
+        "norm_by": norm_by,
+    }
+    return vis_dict, matrix_df, item_df, item_df_wide
+
+# Generates the in-notebook visualization for concept induction results
+# Takes the same input and parameters as build_vis_data and wraps its result in a MatrixWidget
+# Output: tuple (widget, matrix_df, item_df, item_df_wide)
+def visualize(in_df, score_df, doc_col, doc_id_col, score_col, df_filtered, df_bullets, concepts, cols_to_show=[], slice_col=None, max_slice_bins=None, slice_bounds=None, show_highlights=False, norm_by=None, debug=False):
+    vis_dict, matrix_df, item_df, item_df_wide = build_vis_data(in_df, score_df, doc_col, doc_id_col, score_col, df_filtered, df_bullets, concepts, cols_to_show=cols_to_show, slice_col=slice_col, max_slice_bins=max_slice_bins, slice_bounds=slice_bounds, show_highlights=show_highlights, norm_by=norm_by, debug=debug)
+    w = MatrixWidget(**vis_dict)
     return w, matrix_df, item_df, item_df_wide
 
 def get_select_widget(concepts_json):
