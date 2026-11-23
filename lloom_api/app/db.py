@@ -1,8 +1,8 @@
 import json
 import sqlite3
 from collections.abc import Generator
+from contextlib import contextmanager
 from typing import Any
-from fastapi import Request
 
 # Possible Run Statuses (the same words the frontend shows)
 RUN_STATUS = (
@@ -160,23 +160,21 @@ def initialize_database(path: str) -> None:
 
 
 
-#The fastapi dependency gnerator, gives each request its own database connections,
-# also handling the cleanup 
-def get_db(request: Request) -> Generator[sqlite3.Connection, None, None]:
-    """
-    Fast API runs this function, then route can recieve it with,
-    connection: sqlite.Connection = Depends(get_db)
-    """
-
-    connection = open_connection(request.app.state.db_path)
+# Opens a connection from a path: commits if the block succeeds, rolls back if it
+# raises, and always closes. Routes and the background worker both use it:
+#   with transaction(path) as connection:
+# The commit happens when the block ends, so a route that returns after the block
+# has already saved its changes before the client gets the response.
+@contextmanager
+def transaction(path: str) -> Generator[sqlite3.Connection, None, None]:
+    connection = open_connection(path)
 
     try:
         yield connection
         connection.commit()
-    except Exception: #Checks if any exceptions ocurr, cleanup
+    except Exception:
         connection.rollback()
         raise
-
     finally:
         connection.close()
 
@@ -375,8 +373,8 @@ def update_run_state(
     generation_estimate: dict[str, Any] | None,
     score_estimate: dict[str, Any] | None,
     session_pickle: bytes | None,
-    cost_so_far: float,
-    elapsed_seconds: float,
+    cost_so_far: float | None,
+    elapsed_seconds: float | None,
     updated_at: str,
 ) -> None:
     # COALESCE(?, column) keeps the saved value when we pass None,
@@ -387,8 +385,8 @@ def update_run_state(
         SET generation_estimate_json = COALESCE(?, generation_estimate_json),
             score_estimate_json = COALESCE(?, score_estimate_json),
             session_pickle = COALESCE(?, session_pickle),
-            cost_so_far = ?,
-            elapsed_seconds = ?,
+            cost_so_far = COALESCE(?, cost_so_far),
+            elapsed_seconds = COALESCE(?, elapsed_seconds),
             updated_at = ?
         WHERE id = ?
         """,
@@ -455,6 +453,20 @@ def get_job(connection: sqlite3.Connection, job_id: str) -> sqlite3.Row | None:
         (job_id,),
     ).fetchone()
 
+# A run can have many jobs (one per attempt). The latest is the one that counts.
+# rowid breaks a tie if two jobs get the same timestamp.
+def get_latest_job(connection: sqlite3.Connection, run_id: str) -> sqlite3.Row | None:
+    return connection.execute(
+        """
+        SELECT * FROM jobs
+        WHERE run_id = ?
+        ORDER BY created_at DESC, rowid DESC
+        LIMIT 1
+        """,
+        (run_id,),
+    ).fetchone()
+
+
 def update_job_progress(
     connection: sqlite3.Connection,
     *,
@@ -476,6 +488,35 @@ def update_job_progress(
     )
 
 
+# Cancelling is a request: the route sets the flag, and the worker reads it
+# the next time LLooM reports progress. A job that is already finished can't
+# be cancelled, so the flag is only set for Pending and Running jobs.
+# Returns True if the flag was set.
+def request_job_cancel(
+    connection: sqlite3.Connection,
+    *,
+    job_id: str,
+    updated_at: str,
+) -> bool:
+    cursor = connection.execute(
+        """
+        UPDATE jobs
+        SET cancel_requested = 1, updated_at = ?
+        WHERE id = ? AND status IN ('Pending', 'Running')
+        """,
+        (updated_at, job_id),
+    )
+    return cursor.rowcount > 0
+
+
+def is_cancel_requested(connection: sqlite3.Connection, job_id: str) -> bool:
+    row = connection.execute(
+        "SELECT cancel_requested FROM jobs WHERE id = ?",
+        (job_id,),
+    ).fetchone()
+    return row is not None and row["cancel_requested"] == 1
+
+
 # Helper functions for settings table, which has only one row (id=1)
 
 def get_settings(connection: sqlite3.Connection) -> sqlite3.Row | None:
@@ -495,4 +536,33 @@ def save_settings(connection: sqlite3.Connection, *, provider: str, model: str, 
             api_key = excluded.api_key
         """,
         (provider, model, api_key),
+    )
+
+
+# Fails every job that was Pending or Running when the server stopped, and its run.
+# Called once at startup, before any new job is submitted. At that moment no worker
+# exists, so a job still marked Pending or Running can never finish.
+def fail_interrupted_jobs(connection: sqlite3.Connection, *, updated_at: str) -> None:
+    # Runs first: it finds its runs through the jobs, and the second statement
+    # changes those jobs, so after it there would be nothing left to find.
+    # In SQLite the right side of SET uses the OLD row, so previous_status = status
+    # saves the status the run had (Pending or Running) before it becomes Failed.
+    connection.execute(
+        """
+        UPDATE runs
+        SET previous_status = status, status = 'Failed', updated_at = ?
+        WHERE id IN (
+            SELECT run_id FROM jobs WHERE status IN ('Pending', 'Running')
+        )
+        """,
+        (updated_at,),
+    )
+
+    connection.execute(
+        """
+        UPDATE jobs
+        SET status = 'Failed', error = 'Server restarted', updated_at = ?
+        WHERE status IN ('Pending', 'Running')
+        """,
+        (updated_at,),
     )
