@@ -1,7 +1,7 @@
 import json
 import pickle
-
-
+import sqlite3
+import pytest
 
 from app.db import (
     create_dataset,
@@ -14,6 +14,7 @@ from app.db import (
     get_run,
     initialize_database,
     open_connection,
+    get_settings, save_settings
 )
 
 
@@ -64,6 +65,7 @@ def insert_dataset(connection):
         dataset_id="dataset-1",
         project_id="project-1",
         name="responses.csv",
+        file_format="CSV",
         file_blob=b"question,answer\none,\x00two\n",
         columns=["lloom_id", "question", "answer"],
         text_columns=["question", "answer"],
@@ -88,8 +90,9 @@ def insert_run(connection):
         run_id="run-1",
         project_id="project-1",
         dataset_id="dataset-1",
+        name="Initial analysis",
         config={"model": "gpt-5", "num_concepts": 10},
-        status="awaiting_approval",
+        status="Draft",
         params={"temperature": 0.2},
         generation_estimate={"cost": 0.01, "seconds": 10},
         score_estimate=None,
@@ -146,6 +149,7 @@ def test_dataset_blob_and_json_round_trip(tmp_path):
             }
         ]
         assert dataset["id_column"] == "lloom_id"
+        assert dataset["format"] == "CSV"
     finally:
         connection.close()
 
@@ -163,7 +167,8 @@ def test_run_pickle_round_trip(tmp_path):
         assert run is not None
         assert run["project_id"] == "project-1"
         assert run["dataset_id"] == "dataset-1"
-        assert run["status"] == "awaiting_approval"
+        assert run["name"] == "Initial analysis"
+        assert run["status"] == "Draft"
         assert json.loads(run["config_json"]) == {
             "model": "gpt-5",
             "num_concepts": 10,
@@ -184,8 +189,7 @@ def test_job_round_trip(tmp_path):
             connection,
             job_id="job-1",
             run_id="run-1",
-            kind="generate",
-            status="running",
+            status="Running",
             step="creating concepts",
             done=2,
             total=10,
@@ -199,8 +203,8 @@ def test_job_round_trip(tmp_path):
 
         assert job is not None
         assert job["run_id"] == "run-1"
-        assert job["kind"] == "generate"
-        assert job["status"] == "running"
+        assert job["status"] == "Running"
+        assert job["cancel_requested"] == 0
         assert job["step"] == "creating concepts"
         assert job["done"] == 2
         assert job["total"] == 10
@@ -229,5 +233,61 @@ def test_initializing_twice_preserves_data(tmp_path):
     finally:
         connection.close()
 
+def test_settings_round_trip(tmp_path):
+    _, connection = make_connection(tmp_path)
+
+    try:
+        save_settings(
+            connection,
+            provider="OpenAI",
+            model="gpt-5",
+            api_key="test-key",
+        )
+        connection.commit()
+
+        settings = get_settings(connection)
+
+        assert settings is not None
+        assert settings["provider"] == "OpenAI"
+        assert settings["model"] == "gpt-5"
+        assert settings["api_key"] == "test-key"
+    finally:
+        connection.close()
 
 
+def test_run_can_have_only_one_job(tmp_path):
+    _, connection = make_connection(tmp_path)
+
+    try:
+        insert_run(connection)
+
+        create_job(
+            connection,
+            job_id="job-1",
+            run_id="run-1",
+            status="Pending",
+            step=None,
+            done=0,
+            total=0,
+            error=None,
+            cancel_requested=0,
+            created_at=TIMESTAMP,
+            updated_at=TIMESTAMP,
+        )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            create_job(
+                connection,
+                job_id="job-2",
+                run_id="run-1",
+                status="Pending",
+                step=None,
+                done=0,
+                total=0,
+                error=None,
+                cancel_requested=0,
+                created_at=TIMESTAMP,
+                updated_at=TIMESTAMP,
+            )
+    finally:
+        connection.close()
