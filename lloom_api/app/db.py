@@ -5,30 +5,10 @@ from typing import Any
 from fastapi import Request
 
 # Possible Run Statuses
-RUN_STATUS = (
-    "awaiting_approval",
-    "generating",
-    "concepts_ready",
-    "scoring",
-    "scored",
-    "failed",
-)
+RUN_STATUS = ("Draft", "Pending", "Running", "Completed", "Failed", "Cancelled")
 
 # Possible Job Statuses
-JOB_STATUS = (
-    "running",
-    "succeeded",
-    "failed",
-)
-
-#Types of Jobs
-
-JOB_TYPE = (
-    "generate",
-    "score",
-)
-
-
+JOB_STATUS = ("Pending", "Running", "Completed", "Failed", "Cancelled")
 
 #Functions that help us build database pipeline
 
@@ -67,6 +47,7 @@ def initialize_database(path: str) -> None:
                 id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL,
                 name TEXT NOT NULL,
+                format TEXT NOT NULL CHECK (format IN ('CSV', 'JSON')),
                 file_blob BLOB NOT NULL,
                 columns_json TEXT NOT NULL DEFAULT '[]',
                 text_columns_json TEXT NOT NULL DEFAULT '[]',
@@ -81,16 +62,10 @@ def initialize_database(path: str) -> None:
                 id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL,
                 dataset_id TEXT NOT NULL,
+                name TEXT NOT NULL,
                 config_json TEXT NOT NULL DEFAULT '{}',
                 status TEXT NOT NULL CHECK (
-                    status IN (
-                        'awaiting_approval',
-                        'generating',
-                        'concepts_ready',
-                        'scoring',
-                        'scored',
-                        'failed'
-                    )
+                    status IN ('Draft', 'Pending', 'Running', 'Completed', 'Failed', 'Cancelled')
                 ),
                 params_json TEXT NOT NULL DEFAULT '{}',
                 generation_estimate_json TEXT,
@@ -107,18 +82,27 @@ def initialize_database(path: str) -> None:
 
             CREATE TABLE IF NOT EXISTS jobs (
                 id TEXT PRIMARY KEY,
-                run_id TEXT NOT NULL,
-                kind TEXT NOT NULL CHECK (kind IN ('generate', 'score')),
+                run_id TEXT NOT NULL UNIQUE,
                 status TEXT NOT NULL CHECK (
-                    status IN ('running', 'succeeded', 'failed')
+                    status IN ('Pending', 'Running', 'Completed', 'Failed', 'Cancelled')
                 ),
                 step TEXT,
                 done INTEGER NOT NULL DEFAULT 0,
                 total INTEGER NOT NULL DEFAULT 0,
                 error TEXT,
+                cancel_requested INTEGER NOT NULL DEFAULT 0 CHECK (
+                    cancel_requested IN (0, 1)
+                ),
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY (run_id) REFERENCES runs(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                api_key TEXT NOT NULL
             );
 
             CREATE INDEX IF NOT EXISTS projects_last_opened_at_idx
@@ -157,7 +141,7 @@ def get_db(request: Request) -> Generator[sqlite3.Connection, None, None]:
         yield connection
         connection.commit()
     except Exception: #Checks if any exceptions ocurr, cleanup
-        connection.rollback()
+        connection.rollback()()
         raise
 
     finally:
@@ -220,6 +204,7 @@ def create_dataset(
     dataset_id: str,
     project_id: str,
     name: str,
+    file_format: str,
     file_blob: bytes,
     columns: list[str],
     text_columns: list[str],
@@ -234,6 +219,7 @@ def create_dataset(
             id,
             project_id,
             name,
+            format,
             file_blob,
             columns_json,
             text_columns_json,
@@ -242,12 +228,13 @@ def create_dataset(
             id_column,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             dataset_id,
             project_id,
             name,
+            file_format,
             file_blob,
             json.dumps(columns),
             json.dumps(text_columns),
@@ -276,6 +263,7 @@ def create_run(
     run_id: str,
     project_id: str,
     dataset_id: str,
+    name: str,
     config: dict[str, Any],
     status: str,
     params: dict[str, Any],
@@ -291,6 +279,7 @@ def create_run(
             id,
             project_id,
             dataset_id,
+            name,
             config_json,
             status,
             params_json,
@@ -300,12 +289,13 @@ def create_run(
             created_at,
             updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             run_id,
             project_id,
             dataset_id,
+            name,
             json.dumps(config),
             status,
             json.dumps(params),
@@ -389,12 +379,12 @@ def create_job(
     *,
     job_id: str,
     run_id: str,
-    kind: str,
     status: str,
     step: str | None,
     done: int,
     total: int,
     error: str | None,
+    cancel_requested: int = 0,
     created_at: str,
     updated_at: str,
 ) -> None:
@@ -403,12 +393,12 @@ def create_job(
         INSERT INTO jobs (
             id,
             run_id,
-            kind,
             status,
             step,
             done,
             total,
             error,
+            cancel_requested,
             created_at,
             updated_at
         )
@@ -417,12 +407,12 @@ def create_job(
         (
             job_id,
             run_id,
-            kind,
             status,
             step,
             done,
             total,
             error,
+            cancel_requested,
             created_at,
             updated_at,
         ),
@@ -453,4 +443,21 @@ def update_job_progress(
         WHERE id = ?
         """,
         (status, step, done, total, error, updated_at, job_id),
+    )
+
+
+def get_settings(connection: sqlite3.Connection) -> sqlite3.Row | None:
+    return connection.execute("SELECT provider, model, api_key FROM settings WHERE id = 1").fetchone()
+
+def save_settings(connection: sqlite3.Connection, *, provider: str, model: str, api_key: str,) -> None:
+    connection.execute(
+        """
+        INSERT INTO settings (id, provider, model, api_key)
+        VALUES (1, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            provider = excluded.provider,
+            model = excluded.model,
+            api_key = excluded.api_key
+        """,
+        (provider, model, api_key),
     )
