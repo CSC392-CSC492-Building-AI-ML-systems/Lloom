@@ -72,6 +72,7 @@ export function updateResultQuery(patch: Record<string, string | null>, replace 
         else url.searchParams.set(key, value);
     }
     const href = url.pathname + (url.search ? url.search : "");
+    // Next.js copies its router state into these entries and synchronizes search params.
     if (replace) window.history.replaceState(null, "", href);
     else window.history.pushState(null, "", href);
 }

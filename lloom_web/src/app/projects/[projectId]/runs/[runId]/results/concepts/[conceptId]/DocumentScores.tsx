@@ -16,10 +16,12 @@ export default function DocumentScores({
     results,
     concept,
     filters,
+    onViewDocument,
 }: {
     results: RunResults;
     concept: ResultConcept;
     filters: ReturnType<typeof readResultQuery>;
+    onViewDocument: (id: string) => void;
 }) {
     const [notice, setNotice] = useState({ key: "", message: "" });
     const filterKey = JSON.stringify([
@@ -306,11 +308,7 @@ export default function DocumentScores({
                                                 <button
                                                     type="button"
                                                     aria-label={`View document ${document.id}`}
-                                                    onClick={() =>
-                                                        announce(
-                                                            `Document ${document.id} for ${concept.name}: Document Details is not implemented yet. No overlay was opened.`,
-                                                        )
-                                                    }
+                                                    onClick={() => onViewDocument(document.id)}
                                                     className="min-h-11 rounded text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary"
                                                 >
                                                     View

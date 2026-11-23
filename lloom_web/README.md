@@ -1,156 +1,145 @@
 # LLooM Web
 
-The Next.js frontend for LLooM (Language Model-based Concept Induction).
+## 1. Overview
 
-Built with Next.js 16, React 19, TypeScript, and Tailwind CSS v4.
+LLooM Web is the Next.js 16 / React 19 frontend for Language Model-based Concept Induction: discovering and inspecting concepts in text collections. It demonstrates project workspaces, run configuration/review, simulated execution, Concept Explorer, Concept Details, and Document Details.
 
-## Getting Started
+**This is an illustrative frontend demo.** No actual datasets are loaded or stored. `src/fixtures/projects.ts` defines fictional dataset metadata and sample rows; `src/fixtures/run-results.fixtures.ts` generates illustrative documents, concepts, scores, evidence, and rationales. Those results are not derived from the sample rows or a connected LLooM backend.
 
-### Prerequisites
+## 2. Getting Started
 
-- Node.js 20.9 or newer
-- npm
-
-### Installation
-
-From the `lloom_web/` directory, install dependencies:
+Requires Node.js 20.9+ and npm. From the repository root:
 
 ```bash
-npm install
-```
-
-Start the development server:
-
-```bash
+cd lloom_web
+npm ci
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open http://localhost:3000. The script is `next dev`, without a custom port; if 3000 is occupied, substitute the port printed by Next.js throughout this guide.
 
-Changes to the source code will automatically update the application.
+```bash
+npm run check   # ESLint, TypeScript, source formatting
+npm run build   # Production build
+npm run start   # Serve the production build
+```
 
-## Development Workflow
+Individual checks: `npm run lint`, `npm run typecheck`, `npm run format:check`. `npm run format` formats `src/**/*.{ts,tsx,css}`; these formatting scripts do not cover README Markdown. Use `npm ci` for locked dependencies, or `npm install` when intentionally updating them.
 
-The project uses ESLint, TypeScript strict mode, and Prettier to maintain code quality and consistency.
+## 3. Site Map
 
-### Available Scripts
+| Screen | Route or state | Access |
+|---|---|---|
+| Landing Page | `/` | Project list/search |
+| Create Project | `/projects/new` | Form/file selection; creation/upload are placeholders |
+| Project Workspace | `/projects/[projectId]` | Fixture project |
+| Configure Run | `/projects/[projectId]/runs/new` | Defaults, or `?draft=run-3` in project 1 |
+| Review Run | `/projects/[projectId]/runs/new/review` | Current configuration; direct access loads defaults or requested draft |
+| Run Progress | `/projects/[projectId]/runs/[runId]/progress` | Completed fixture, explicit preview, or temporary run |
+| API & Model Settings | `/settings/models` | Simulated test and page-local settings |
+| Concept Explorer | `/projects/[projectId]/runs/[runId]/results` | Completed supported run |
+| Concept Details | `/projects/[projectId]/runs/[runId]/results/concepts/[conceptId]` | Concept in that run |
+| Document Details | Concept Details plus `?document=[documentId]` | Modal; not a separate route |
 
-| Command | Description |
+```text
+Landing → Project Workspace → Configure Run → Review Run → Run Progress
+                   ↑                                          ↓
+                   └──────────────────────────────── Concept Explorer
+                                                       ↓
+                                                 Concept Details
+                                                       ↓
+                                             Document Details modal
+
+Landing → Create Project (form prototype)
+Profile menu → API & Model Settings
+```
+
+## 4. Fixture Reference
+
+| Project ID | Name | Run ID and status |
+|---|---|---|
+| `1` | Customer Feedback Analysis | `run-3`: Draft; `run-2`, `run-1`: Completed |
+| `2` | Reddit Discussion Analysis | `reddit-run-1`: Completed |
+| `3` | Survey Responses | No runs or dataset fixtures; empty workspace |
+
+In project 1, **Run 3 — New experiment** demonstrates draft Resume, **Run 2 — Political posts analysis** demonstrates political results, and **Run 1 — 2025 survey** demonstrates survey results. Project 2's **Run 1 — Community themes** offers another completed political example. All completed fixture runs support Explorer and both details interfaces after refresh.
+
+| Project / run | Concept ID | Useful document or state |
+|---|---|---|
+| `1` / `run-2` | `political-posts-concept-1` — Fighting Injustice | `0002`: match, score 1.00 with evidence; `0001`: non-match, score 0.00 without evidence |
+| `1` / `run-2` | `political-posts-concept-6` — Environmental Policy | Intentionally has zero matches |
+| `1` / `run-1` | `survey-2025-concept-1` — Customer Support | `0002`: match; no document metadata |
+
+Political results offer **Likes (synthetic)** grouping; this is illustrative result metadata, not a column in an actual dataset. Survey results offer All Documents. Use the filtered URL below to demonstrate a specific slice without configuring it manually.
+
+Scores express ordered agreement with inclusion criteria, not probabilities. Matches score 1.00; lower known scores appear under Non-matches. Missing scores differ from zero. Outlier is a derived category and has no details interface.
+
+## 5. Direct Demo URLs
+
+These examples work in a fresh browser session after starting the server. Completed fixture results need no simulated execution. Progress previews start a new simulation on arrival.
+
+| Demo | Copyable local URL |
 |---|---|
-| `npm run dev` | Start the development server |
-| `npm run build` | Create a production build |
-| `npm run start` | Start the production server |
-| `npm run lint` | Run ESLint |
-| `npm run typecheck` | Run TypeScript type checking |
-| `npm run format` | Automatically format source files with Prettier |
-| `npm run format:check` | Check formatting without modifying files |
-| `npm run check` | Run linting, type checking, and formatting checks |
+| Landing | http://localhost:3000/ |
+| Create Project form | http://localhost:3000/projects/new |
+| Project Workspace | http://localhost:3000/projects/1 |
+| Empty workspace | http://localhost:3000/projects/3 |
+| Configure / Resume fixture draft | http://localhost:3000/projects/1/runs/new?draft=run-3 |
+| Review fixture draft | http://localhost:3000/projects/1/runs/new/review?draft=run-3 |
+| Success progress preview | http://localhost:3000/projects/1/runs/demo-success/progress |
+| Failure progress preview | http://localhost:3000/projects/1/runs/demo-failure/progress |
+| Political Explorer | http://localhost:3000/projects/1/runs/run-2/results |
+| Survey Explorer | http://localhost:3000/projects/1/runs/run-1/results |
+| Reddit Explorer | http://localhost:3000/projects/2/runs/reddit-run-1/results |
+| Concept Details / Matches (default) | http://localhost:3000/projects/1/runs/run-2/results/concepts/political-posts-concept-1 |
+| Non-matches | http://localhost:3000/projects/1/runs/run-2/results/concepts/political-posts-concept-1?view=non-matches |
+| Filtered Matches (synthetic Likes slice) | http://localhost:3000/projects/1/runs/run-2/results/concepts/political-posts-concept-1?groupBy=syntheticLikes&slice=likes-30-69&view=matches |
+| Document Details (matching 0002) | http://localhost:3000/projects/1/runs/run-2/results/concepts/political-posts-concept-1?document=0002 |
+| Document Details (zero-score 0001) | http://localhost:3000/projects/1/runs/run-2/results/concepts/political-posts-concept-1?view=non-matches&document=0001 |
+| API & Model Settings | http://localhost:3000/settings/models |
 
-### Before Pushing Changes
+Runs started from Review receive temporary `sim-*` URLs. Obtain those by starting a run; they require the same in-memory project session. Similarly, complete a `demo-*` progress preview before opening its results. A fresh results-only visit cannot recover a temporary run.
 
-All contributors should run:
+## 6. Demo Walkthrough
 
-```bash
-npm run check
-npm run build
-```
+### Short demo: completed results, no execution required
 
-If the formatting check fails, run:
+1. Open Political Explorer above. Explain that counts and documents are illustrative fixtures.
+2. Inspect concept bars, the zero-match concept, and the derived Outlier category.
+3. In Concept Matrix, use Likes (synthetic). Open a Fighting Injustice bubble to carry its slice into Concept Details, or click its name/bar for all documents.
+4. Switch Matches / Non-matches, search a document ID, change sort/slice, and paginate.
+5. Click View. Inspect full text, synthetic metadata, ordinal score, evidence, and rationale. Non-matches can lack evidence; zero is a valid score.
+6. Close with Escape or the close button; table filters and position remain. Demonstrate Back/Forward, then copy the modal URL and refresh to show completed fixture deep links.
 
-```bash
-npm run format
-```
+### Full workflow: simulated execution
 
-Then rerun the checks before pushing.
+1. Start at Landing and open Customer Feedback Analysis.
+2. Resume Run 3 — New experiment, or choose Configure New Run for defaults. Draft edits are temporary.
+3. Inspect the data configuration and concept-generation settings, then proceed to Review Run. Return to Configure if needed.
+4. Click Start Run. Inspect the configuration summary and simulated distillation, clustering/synthesis, review, and scoring stages.
+5. Wait for completion, or click **View Completed Results** while active to finish immediately and open the preview. No provider requests occur.
+6. Explore concepts/matrix cells, open Concept Details, switch Matches / Non-matches, and open Document Details.
+7. Return to the same workspace to see the temporary run. Refreshing or leaving that project discards it; completed fixture runs remain available.
 
-## Development Guidelines
+For a predictable failure during first-round synthesis, use the Failure progress preview. API & Model Settings offers a separate simulated connection test; its selections do not configure execution.
 
-Frontend architecture, coding conventions, styling guidelines, and expectations for AI coding agents are documented in [AGENTS.md](./AGENTS.md).
+## 7. Current Limitations
 
-The frontend's visual design is maintained in [Figma](https://www.figma.com/design/ZD63PswmLrGbgtIn4OulsL/LLooM-Web-UI-Design?node-id=1-2&t=m9eXBtnLz6cpRU9c-1).
+- **Illustrative data and execution:** No actual datasets are loaded, stored, uploaded, or analyzed. Dataset metadata/sample rows and generated results are fictional fixtures. Execution uses demo timing; seeds and model selections do not generate real results. Some configurations, such as survey `follow_up`, have no result preview.
+- **Temporary state:** Configuration edits, simulated runs, and model settings are held in memory. Refreshing resets them; leaving the project discards its temporary runs. Completed fixture results remain directly accessible.
+- **Unimplemented operations:** Project creation/upload, adding datasets, project settings, Run Settings, Outlier Details, authentication, and advanced model settings remain placeholders. Connection tests are simulated; API keys are never sent or persisted, and model settings apply only on that page.
+- **Result access:** Only completed, supported runs have results. Unknown IDs are rejected, and empty project 3 cannot start a valid run. Historical completed-run progress summaries use illustrative configuration defaults.
 
-## Run progress prototype
+## 8. Development Notes
 
-Start Run on Review creates a configuration snapshot and opens
-`/projects/[projectId]/runs/[runId]/progress`. `ProjectRunProvider` keeps temporary
-runs in memory while that project layout is mounted, including when returning to
-the Workspace. Refreshing or leaving the project discards them. A lost temporary
-run displays an unavailable message; no state is reconstructed from its URL.
+| Location | Purpose |
+|---|---|
+| `src/app/` | Pages, workflow screens, results interfaces, global theme tokens |
+| `src/components/` | Shared header, project, profile, and theme UI |
+| `src/fixtures/projects.ts` | Fictional projects, dataset metadata/sample rows, and runs |
+| `src/fixtures/run-results.fixtures.ts` | Generated illustrative documents, concepts, scores, evidence, and metadata |
+| `src/fixtures/run-results.ts` | Shared result types, document selection, and counts |
 
-The four visible stages simulate distillation, repeated clustering/synthesis with
-optional automatic review, and document scoring. Timing is fixed demo timing, not
-an estimate of real execution. Cancellation and demo completion stop the timers.
-Concept counts are illustrative and capped by the selected dataset's curated
-catalogue (18 survey themes or 9 political themes), not generated results. An
-unsupported text column has no result preview. Model metadata uses the existing
-fixture settings, independently of API & Model Settings.
+Run `npm run check` and `npm run build` before review. When routes or fixtures change, update the demo examples and verify direct links in a fresh browser session, plus the simulated workflow.
 
-For projects with datasets, reproducible preview URLs are:
-
-- `/projects/1/runs/demo-success/progress`
-- `/projects/1/runs/demo-failure/progress` (fails during the first synthesis round)
-
-Existing completed fixture runs can also be viewed at the progress route; their
-configuration summary uses illustrative defaults because historical configuration
-is not stored in those fixtures. View Completed Results completes an active
-simulation and opens its illustrative Concept Explorer preview. Completed runs
-open that preview directly. No backend execution, provider requests, or persistence
-is implemented.
-
-## Concept Explorer prototype
-
-Completed runs open `/projects/[projectId]/runs/[runId]/results` from Workspace or
-Progress. Existing completed fixture runs survive refresh; simulated results
-require their completed in-memory run. Unknown/cross-project IDs are rejected.
-Unfinished runs and unsupported dataset/text-column combinations have explicit
-unavailable states, rather than unrelated fallback results.
-
-`src/fixtures/run-results.ts` defines concepts, full documents, metadata, ordinal
-agreement scores, evidence/rationale, and slice definitions. Curated fictional
-records are built deterministically in `run-results.fixtures.ts`. These records
-are not parsed from dataset files or generated from seed phrases/model settings.
-The default match threshold is 1. Chart counts, matrix cells, and Outliers share
-the same scores. Documents can match multiple concepts; Outlier is derived and is
-excluded from the generated concept count. Missing scores are distinct from zero
-and do not establish that a document is an Outlier. The final concept in multi-
-concept previews intentionally has zero matches.
-
-Political previews offer **Likes (synthetic)** numeric slices and **All Documents**.
-Synthetic Likes exists only in the result fixture records; no Likes field is added
-to the existing dataset fixtures. Survey previews offer All Documents. Matrix
-bubble area represents counts, including accessible exact counts. All charts and
-matrices support local horizontal scrolling and keyboard controls.
-
-Run Settings, Outlier Details, and Document Details remain accessible placeholder
-feedback. No editing, real execution, authentication, or persistence is implemented.
-
-## Concept Details prototype
-
-Concept names and bars open
-`/projects/[projectId]/runs/[runId]/results/concepts/[conceptId]`. Matrix cells also
-carry their exact slice. Explorer grouping is restored by the Back to Concept
-Explorer link. Outlier stays a derived-category placeholder; it has no invented
-concept definition or score.
-
-Matches and Non-matches share one page. Validated URL parameters are `groupBy`,
-`slice`, `view` (`matches` / `non-matches`), `q` (case-insensitive ID/text search),
-`sort` (`id` ascending / `score` descending with ID tie-breaking), and `page`.
-Native browser history updates filters without reloading the project provider.
-Search replaces history entries; view, slice, sort, and pagination changes push
-entries. Filtering and sorting reset pagination to page one. Invalid parameters
-show an explicit reset action instead of broadening the selection silently.
-
-The overview's match total is global; Document Scores counts reflect its current
-view, slice, and search. Five documents are shown per page. Missing score records
-and null scores are excluded from both views and reported separately; zero remains
-a valid non-match. Description, criteria, and representative excerpts come from
-the existing shared fixtures. Repeated example excerpts are shown only once.
-
-Document View displays accessible placeholder feedback. No document overlay is
-implemented yet. Existing completed fixtures survive refresh, while temporary
-run details require the same in-memory project session as Concept Explorer.
-
-## Resources
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Tailwind CSS Documentation](https://tailwindcss.com/docs)
+See [AGENTS.md](./AGENTS.md) for conventions and [Figma](https://www.figma.com/design/ZD63PswmLrGbgtIn4OulsL/LLooM-Web-UI-Design) for visual references.
