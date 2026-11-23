@@ -11,6 +11,7 @@ from app.db import (
     get_job,
     get_run,
     is_cancel_requested,
+    request_job_cancel,
     transaction,
     update_job_progress,
     update_run_state,
@@ -82,6 +83,52 @@ def save_session(connection, run_id: str, session: Any) -> None:
     )
 
 
+# Puts a job and its run in a final status (Completed, Failed or Cancelled). The job
+# keeps the step, done and total it last reported, so the frontend can still show
+# where it stopped. Takes a connection, so the caller decides what else goes in
+# the same transaction (the worker saves the session in it).
+def finish_job(
+    connection,
+    job_id: str,
+    run_id: str,
+    status: str,
+    error: str | None,
+) -> None:
+    time = now()
+    job = get_job(connection, job_id)
+    update_job_progress(
+        connection,
+        job_id=job_id,
+        status=status,
+        step=job["step"],
+        done=job["done"],
+        total=job["total"],
+        error=error,
+        updated_at=time,
+    )
+    update_run_status(
+        connection,
+        run_id=run_id,
+        status=status,
+        previous_status=get_run(connection, run_id)["status"],
+        updated_at=time,
+    )
+
+
+# Asks a job to cancel. Returns False if it can't (it doesn't exist, or already finished).
+# A Running job is only flagged: the worker raises JobCancelled at its next progress call.
+# A Pending job has not started, so it is cancelled on the spot, along with its run,
+# instead of staying Pending until the worker gets to it.
+def cancel_job(connection, job_id: str) -> bool:
+    job = get_job(connection, job_id)
+    if job is None or not request_job_cancel(connection, job_id=job_id, updated_at=now()):
+        return False
+
+    if job["status"] == "Pending":
+        finish_job(connection, job_id, job["run_id"], "Cancelled", None)
+    return True
+
+
 # Runs work in the background, one job at a time.
 # It is given the database PATH, not a connection: a connection belongs to one
 # request (or one thread), and the worker keeps going after the request has ended,
@@ -135,9 +182,16 @@ class JobManager:
         # the executor's Future and leave the job Running forever. Every way out
         # ends with the job and the run in a final status.
         try:
-            # Cancelled while it was still waiting in the queue: never start it
             with transaction(self.db_path) as connection:
+                job = get_job(connection, job_id)
                 cancelled = is_cancel_requested(connection, job_id)
+
+            # Cancelled while it was waiting in the queue (cancel_job already marked
+            # it and its run Cancelled): leave everything alone. The run may even
+            # have a newer job by now, and touching the run would overwrite it.
+            if job["status"] != "Pending":
+                return
+            # Flagged in the moment before the worker picked it up: don't start it
             if cancelled:
                 raise JobCancelled()
 
@@ -174,44 +228,14 @@ class JobManager:
             # can't disagree.
             with transaction(self.db_path) as connection:
                 save_session(connection, run_id, session)
-                self._finish(connection, job_id, run_id, "Completed", None)
+                finish_job(connection, job_id, run_id, "Completed", None)
         except JobCancelled:
             # The saved session is left as it was before the job started
             with transaction(self.db_path) as connection:
-                self._finish(connection, job_id, run_id, "Cancelled", None)
+                finish_job(connection, job_id, run_id, "Cancelled", None)
         except Exception as error:
             with transaction(self.db_path) as connection:
-                self._finish(connection, job_id, run_id, "Failed", str(error))
-
-    # Puts the job and its run in a final status. The job keeps the step, done
-    # and total it last reported, so the frontend can still show where it stopped.
-    def _finish(
-        self,
-        connection,
-        job_id: str,
-        run_id: str,
-        status: str,
-        error: str | None,
-    ) -> None:
-        time = now()
-        job = get_job(connection, job_id)
-        update_job_progress(
-            connection,
-            job_id=job_id,
-            status=status,
-            step=job["step"],
-            done=job["done"],
-            total=job["total"],
-            error=error,
-            updated_at=time,
-        )
-        update_run_status(
-            connection,
-            run_id=run_id,
-            status=status,
-            previous_status=get_run(connection, run_id)["status"],
-            updated_at=time,
-        )
+                finish_job(connection, job_id, run_id, "Failed", str(error))
 
     # Builds the progress(step, done, total) callback for one job
     def _progress(self, job_id: str) -> Progress:
@@ -235,5 +259,7 @@ class JobManager:
 
         return progress
 
+    # Lets the job that is running finish, and drops the ones still waiting. Dropped
+    # jobs stay Pending in the database, and the next startup marks them Failed.
     def shutdown(self, wait: bool = True) -> None:
-        self.executor.shutdown(wait=wait)
+        self.executor.shutdown(wait=wait, cancel_futures=True)

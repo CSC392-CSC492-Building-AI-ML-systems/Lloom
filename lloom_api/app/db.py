@@ -3,7 +3,6 @@ import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any
-from fastapi import Request
 
 # Possible Run Statuses (the same words the frontend shows)
 RUN_STATUS = (
@@ -161,22 +160,11 @@ def initialize_database(path: str) -> None:
 
 
 
-#The fastapi dependency gnerator, gives each request its own database connections,
-# also handling the cleanup 
-def get_db(request: Request) -> Generator[sqlite3.Connection, None, None]:
-    """
-    Fast API runs this function, then route can recieve it with,
-    connection: sqlite.Connection = Depends(get_db)
-    """
-
-    # transaction() commits on success, rolls back on error, and always closes
-    with transaction(request.app.state.db_path) as connection:
-        yield connection
-
-
 # Opens a connection from a path: commits if the block succeeds, rolls back if it
-# raises, and always closes. get_db uses it for requests, and code with no request
-# (like a background worker) uses it directly:  with transaction(path) as connection:
+# raises, and always closes. Routes and the background worker both use it:
+#   with transaction(path) as connection:
+# The commit happens when the block ends, so a route that returns after the block
+# has already saved its changes before the client gets the response.
 @contextmanager
 def transaction(path: str) -> Generator[sqlite3.Connection, None, None]:
     connection = open_connection(path)
@@ -465,6 +453,20 @@ def get_job(connection: sqlite3.Connection, job_id: str) -> sqlite3.Row | None:
         (job_id,),
     ).fetchone()
 
+# A run can have many jobs (one per attempt). The latest is the one that counts.
+# rowid breaks a tie if two jobs get the same timestamp.
+def get_latest_job(connection: sqlite3.Connection, run_id: str) -> sqlite3.Row | None:
+    return connection.execute(
+        """
+        SELECT * FROM jobs
+        WHERE run_id = ?
+        ORDER BY created_at DESC, rowid DESC
+        LIMIT 1
+        """,
+        (run_id,),
+    ).fetchone()
+
+
 def update_job_progress(
     connection: sqlite3.Connection,
     *,
@@ -534,4 +536,33 @@ def save_settings(connection: sqlite3.Connection, *, provider: str, model: str, 
             api_key = excluded.api_key
         """,
         (provider, model, api_key),
+    )
+
+
+# Fails every job that was Pending or Running when the server stopped, and its run.
+# Called once at startup, before any new job is submitted. At that moment no worker
+# exists, so a job still marked Pending or Running can never finish.
+def fail_interrupted_jobs(connection: sqlite3.Connection, *, updated_at: str) -> None:
+    # Runs first: it finds its runs through the jobs, and the second statement
+    # changes those jobs, so after it there would be nothing left to find.
+    # In SQLite the right side of SET uses the OLD row, so previous_status = status
+    # saves the status the run had (Pending or Running) before it becomes Failed.
+    connection.execute(
+        """
+        UPDATE runs
+        SET previous_status = status, status = 'Failed', updated_at = ?
+        WHERE id IN (
+            SELECT run_id FROM jobs WHERE status IN ('Pending', 'Running')
+        )
+        """,
+        (updated_at,),
+    )
+
+    connection.execute(
+        """
+        UPDATE jobs
+        SET status = 'Failed', error = 'Server restarted', updated_at = ?
+        WHERE status IN ('Pending', 'Running')
+        """,
+        (updated_at,),
     )
