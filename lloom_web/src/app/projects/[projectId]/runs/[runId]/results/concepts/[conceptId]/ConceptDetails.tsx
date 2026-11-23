@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useRef } from "react";
 import { notFound, useParams, useSearchParams } from "next/navigation";
 import type { ProjectFixture } from "@/fixtures/projects";
 import { getConceptCounts } from "@/fixtures/run-results";
 import type { ResultConcept, RunResults } from "@/fixtures/run-results";
 import { useRunResults } from "../../useRunResults";
-import { explorerHref, readResultQuery } from "../../results-navigation";
+import { explorerHref, readResultQuery, updateResultQuery } from "../../results-navigation";
 import DocumentScores from "./DocumentScores";
+import DocumentDetails from "./DocumentDetails";
 
 const linkClass =
     "inline-flex min-h-11 items-center justify-center rounded-[8px] border border-outline bg-surface px-5 text-[15px] text-primary hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
@@ -85,6 +87,8 @@ function DetailsContent({
     results: RunResults;
 }) {
     const search = useSearchParams();
+    const openedDocumentUrl = useRef<string | null>(null);
+    const documentValues = search.getAll("document");
     const filters = readResultQuery(search, results);
     const backHref = explorerHref(projectId, runId, filters.groupingId);
     const count =
@@ -227,7 +231,25 @@ function DetailsContent({
                 results={results}
                 concept={concept}
                 filters={filters}
+                onViewDocument={(id) => {
+                    updateResultQuery({ document: id });
+                    openedDocumentUrl.current = window.location.href;
+                }}
             />
+            {documentValues.length > 0 && (
+                <DocumentDetails
+                    results={results}
+                    concept={concept}
+                    documentValues={documentValues}
+                    runName={runName}
+                    datasetName={dataset?.name ?? results.datasetId}
+                    onClose={() => {
+                        if (openedDocumentUrl.current === window.location.href)
+                            window.history.back();
+                        else updateResultQuery({ document: null }, true);
+                    }}
+                />
+            )}
         </div>
     );
 }
