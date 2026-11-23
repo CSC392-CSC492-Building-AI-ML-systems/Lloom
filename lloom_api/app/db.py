@@ -1,6 +1,6 @@
 import json
 import sqlite3
-from collections.abc import Generator
+from collections.abc import AsyncGenerator
 from typing import Any
 from fastapi import Request
 
@@ -37,7 +37,10 @@ DATASET_FORMAT = (
 def open_connection(path:str) -> sqlite3.Connection:
     """Open a SQLite connection for one request/worker operation.    
     """
-    connection = sqlite3.connect(path,timeout=30)
+    # FastAPI may resolve dependencies and synchronous endpoints on different
+    # worker threads. Each request owns its connection, so sharing is not used,
+    # but SQLite must permit that hand-off.
+    connection = sqlite3.connect(path, timeout=30, check_same_thread=False)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
@@ -162,7 +165,7 @@ def initialize_database(path: str) -> None:
 
 #The fastapi dependency gnerator, gives each request its own database connections,
 # also handling the cleanup 
-def get_db(request: Request) -> Generator[sqlite3.Connection, None, None]:
+async def get_db(request: Request) -> AsyncGenerator[sqlite3.Connection, None]:
     """
     Fast API runs this function, then route can recieve it with,
     connection: sqlite.Connection = Depends(get_db)
@@ -496,3 +499,27 @@ def save_settings(connection: sqlite3.Connection, *, provider: str, model: str, 
         """,
         (provider, model, api_key),
     )
+
+
+#B3 Helpers proj 
+
+
+# Creates a list of the datasets used by specified project
+def list_datasets_for_project(connection: sqlite3.Connection,project_id: str,) -> list[sqlite3.Row]:
+    return connection.execute(
+        """
+        SELECT * FROM datasets
+        WHERE project_id = ?
+        ORDER BY created_at DESC
+        """,
+        (project_id,),).fetchall()
+
+# Creates a list of the runs used by specified project
+def list_runs_for_project(connection:sqlite3.Connection,project_id:str,) -> list[sqlite3.Row]:
+    return connection.execute(
+        """
+        SELECT * FROM runs
+        WHERE project_id = ?
+        ORDER BY created_at DESC
+        """,
+        (project_id,),).fetchall()

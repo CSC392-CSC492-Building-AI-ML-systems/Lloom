@@ -4,6 +4,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.db import initialize_database
+
+from app.projects import router as projects_router
 # lloom_api/lloom.db, independent of the current directory
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "lloom.db"
 
@@ -14,6 +16,7 @@ FRONTEND_ORIGINS = ["http://localhost:3000"]
 def create_app() -> FastAPI:
     app = FastAPI(title="LLooM API")
 
+    app.include_router(projects_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=FRONTEND_ORIGINS,
