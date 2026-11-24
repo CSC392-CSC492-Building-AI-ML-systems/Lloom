@@ -31,8 +31,8 @@ Individual checks: `npm run lint`, `npm run typecheck`, `npm run format:check`. 
 | Screen | Route or state | Access |
 |---|---|---|
 | Landing Page | `/` | Project list/search |
-| Create Project | `/projects/new` | Form/file selection; creation/upload are placeholders |
-| Project Workspace | `/projects/[projectId]` | Fixture project |
+| Create Project | `/projects/new` | CSV/JSON selection and validation; creation/upload are not connected |
+| Project Workspace | `/projects/[projectId]` | Fixture project; Add Dataset opens a selection-only modal |
 | Configure Run | `/projects/[projectId]/runs/new` | Defaults, or `?draft=run-3` in project 1 |
 | Review Run | `/projects/[projectId]/runs/new/review` | Current configuration; direct access loads defaults or requested draft |
 | Run Progress | `/projects/[projectId]/runs/[runId]/progress` | Completed fixture, explicit preview, or temporary run |
@@ -63,6 +63,8 @@ Profile menu → API & Model Settings
 | `3` | Survey Responses | No runs or dataset fixtures; empty workspace |
 
 In project 1, **Run 3 — New experiment** demonstrates draft Resume, **Run 2 — Political posts analysis** demonstrates political results, and **Run 1 — 2025 survey** demonstrates survey results. Project 2's **Run 1 — Community themes** offers another completed political example. All completed fixture runs support Explorer and both details interfaces after refresh.
+
+Review shows an illustrative **Estimated cost (USD)** for generation plus scoring: the unchanged Run 3 draft shows `~$0.42`. Default configurations have separate fixture estimates. Editing any configuration field without an exact estimate fixture shows **Not available**, so an old estimate is never carried onto a new configuration. Results show estimated and actual costs separately. **Actual cost** is currently **Not available** for every run; a future authoritative `actualCost` value is required, not a database default or a simulated amount.
 
 | Project / run | Concept ID | Useful document or state |
 |---|---|---|
@@ -115,19 +117,25 @@ Runs started from Review receive temporary `sim-*` URLs. Obtain those by startin
 
 1. Start at Landing and open Customer Feedback Analysis.
 2. Resume Run 3 — New experiment, or choose Configure New Run for defaults. Draft edits are temporary.
-3. Inspect the data configuration and concept-generation settings, then proceed to Review Run. Return to Configure if needed.
+3. Inspect the data configuration and concept-generation settings, then proceed to Review Run. Review the illustrative total estimated cost. Return to Configure and edit a setting to demonstrate an unavailable estimate.
 4. Click Start Run. Inspect the configuration summary and simulated distillation, clustering/synthesis, review, and scoring stages.
 5. Wait for completion, or click **View Completed Results** while active to finish immediately and open the preview. No provider requests occur.
 6. Explore concepts/matrix cells, open Concept Details, switch Matches / Non-matches, and open Document Details.
 7. Return to the same workspace to see the temporary run. Refreshing or leaving that project discards it; completed fixture runs remain available.
 
-For a predictable failure during first-round synthesis, use the Failure progress preview. API & Model Settings offers a separate simulated connection test; its selections do not configure execution.
+For a predictable failure during first-round synthesis, use the Failure progress preview. The failure reason appears in Current Activity. Failed and cancelled runs offer **Retry**, which opens a confirmation with the estimated cost and real-run charge warning. **Confirm Retry** preserves the run ID and configuration, clears progress/error, and restarts from Distill; dismissing the dialog changes nothing. This deterministic preview fails again on every attempt; no backend job is submitted or charges incurred. Cancellation still stops an active simulation. Frontend guards prevent duplicate confirmations; Phase 2 must also enforce duplicate-request protection server-side.
+
+API & Model Settings offers OpenAI with **LLooM default (recommended)** (`default`), GPT-4o (`gpt-4o`), and GPT-4o mini (`gpt-4o-mini`). LLooM default uses GPT-4o for synthesis/review and GPT-4o mini for distillation/scoring; explicit choices apply to all chat-model stages. Embeddings stay `text-embedding-3-large`. Test Connection remains simulated: `demo-fail-not-a-real-api-key` demonstrates failure. Settings stay page-local and do not change execution fixtures or existing run snapshots.
+
+### File selection and error demo
+
+Open Create Project, or choose **+ Add Dataset** in a workspace. Select or drop CSV/JSON files (extensions are case-insensitive). Unsupported extensions, including ZIP, and empty files are rejected by filename; valid files in the same batch remain selected. Remove files or select corrected files to try again. Create Project preserves its name/description and selections after errors. Add Dataset selections last until its modal closes. Submitting either interface explains that nothing was uploaded or created; the fixture dataset list does not change. These checks do not parse file contents or enforce a file-size limit. The shared uploader can also display a future backend `{ detail: string }` error without clearing selections.
 
 ## 7. Current Limitations
 
 - **Illustrative data and execution:** No actual datasets are loaded, stored, uploaded, or analyzed. Dataset metadata/sample rows and generated results are fictional fixtures. Execution uses demo timing; seeds and model selections do not generate real results. Some configurations, such as survey `follow_up`, have no result preview.
 - **Temporary state:** Configuration edits, simulated runs, and model settings are held in memory. Refreshing resets them; leaving the project discards its temporary runs. Completed fixture results remain directly accessible.
-- **Unimplemented operations:** Project creation/upload, adding datasets, project settings, Run Settings, Outlier Details, authentication, and advanced model settings remain placeholders. Connection tests are simulated; API keys are never sent or persisted, and model settings apply only on that page.
+- **Unimplemented operations:** Project creation, actual dataset uploads, project settings, Run Settings, Outlier Details, authentication, and advanced model settings are not connected. Create Project and Add Dataset provide selection/error previews only. Connection tests are simulated; API keys are never sent or persisted, and model settings apply only on that page.
 - **Result access:** Only completed, supported runs have results. Unknown IDs are rejected, and empty project 3 cannot start a valid run. Historical completed-run progress summaries use illustrative configuration defaults.
 
 ## 8. Development Notes
@@ -139,6 +147,8 @@ For a predictable failure during first-round synthesis, use the Failure progress
 | `src/fixtures/projects.ts` | Fictional projects, dataset metadata/sample rows, and runs |
 | `src/fixtures/run-results.fixtures.ts` | Generated illustrative documents, concepts, scores, evidence, and metadata |
 | `src/fixtures/run-results.ts` | Shared result types, document selection, and counts |
+| `src/fixtures/run-costs*.ts`, `src/fixtures/models.ts` | Nullable run costs, illustrative estimate snapshots, and shared model values/labels |
+| `src/components/DatasetUpload.tsx`, `AddDatasetDialog.tsx` | Shared CSV/JSON selection, accessible errors, and Workspace selection modal |
 
 Run `npm run check` and `npm run build` before review. When routes or fixtures change, update the demo examples and verify direct links in a fresh browser session, plus the simulated workflow.
 

@@ -10,6 +10,7 @@ import {
     completeRun,
     createPreviewRun,
     createSimulatedRun,
+    retrySimulatedRun,
 } from "./runs/run-simulation";
 import type { SimulatedRun } from "./runs/run-simulation";
 
@@ -19,6 +20,7 @@ type RunContext = {
     openPreview: (id: string) => void;
     cancelRun: (id: string) => void;
     finishRun: (id: string) => void;
+    retryRun: (id: string) => void;
 };
 const Context = createContext<RunContext | null>(null);
 export default function ProjectRunProvider({
@@ -71,8 +73,15 @@ export default function ProjectRunProvider({
             current.map((run) => (run.id === id && run.dueAt !== null ? completeRun(run) : run)),
         );
     }
+    function retryRun(id: string) {
+        setRuns((current) =>
+            current.map((run) => (run.id === id ? retrySimulatedRun(run, Date.now()) : run)),
+        );
+    }
     return (
-        <Context value={{ runs, startRun, openPreview, cancelRun, finishRun }}>{children}</Context>
+        <Context value={{ runs, startRun, openPreview, cancelRun, finishRun, retryRun }}>
+            {children}
+        </Context>
     );
 }
 export function useProjectRuns() {

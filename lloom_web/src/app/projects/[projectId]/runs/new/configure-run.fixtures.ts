@@ -1,8 +1,9 @@
 import type { DatasetFixture } from "@/fixtures/projects";
 import type { RunConfiguration } from "./run-configuration";
+import type { ModelSettings } from "@/fixtures/models";
 
 // Display-only metadata; these are not configured credentials or model access.
-export const fixtureModelSettings = { provider: "OpenAI", model: "GPT-4o" };
+export const fixtureModelSettings: ModelSettings = { provider: "openai", model: "default" };
 
 export function createDefaultConfiguration(datasets: DatasetFixture[]): RunConfiguration {
     const dataset = datasets[0];

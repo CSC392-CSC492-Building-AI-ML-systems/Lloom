@@ -7,9 +7,11 @@ import type { DatasetFixture, ProjectFixture } from "@/fixtures/projects";
 import { createDefaultConfiguration } from "./configure-run.fixtures";
 import { validateConfiguration } from "./run-configuration";
 import type { RunConfiguration } from "./run-configuration";
+import { getFixtureEstimatedCost } from "@/fixtures/run-costs.fixtures";
 
 type ConfigurationContextValue = {
     configuration: RunConfiguration;
+    estimatedCost: number | null;
     datasets: DatasetFixture[];
     projectId: string;
     draftQuery: string;
@@ -93,6 +95,7 @@ function ConfigurationState({
         <ConfigurationContext
             value={{
                 configuration,
+                estimatedCost: getFixtureEstimatedCost(configuration),
                 datasets: project.datasets,
                 projectId,
                 draftQuery,

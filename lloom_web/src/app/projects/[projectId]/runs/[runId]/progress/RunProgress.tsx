@@ -6,9 +6,11 @@ import { useEffect, useState } from "react";
 import { CircleCheck, CircleX, LoaderCircle } from "lucide-react";
 import type { ProjectFixture } from "@/fixtures/projects";
 import { useProjectRuns } from "../../../ProjectRunProvider";
-import { completedFixtureRun, isSimulationPreview } from "../../run-simulation";
+import { completedFixtureRun, isSimulationPreview, getLatestJob } from "../../run-simulation";
 import type { SimulatedRun } from "../../run-simulation";
 import AnalysisProgress from "./AnalysisProgress";
+import { modelLabel, providerLabel } from "@/fixtures/models";
+import RetryConfirmationDialog from "./RetryConfirmationDialog";
 
 const buttonClass =
     "inline-flex min-h-11 items-center justify-center rounded-[8px] border border-outline bg-surface px-5 text-[15px] text-primary hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
@@ -20,7 +22,7 @@ export default function RunProgress({
     project: ProjectFixture;
     runId: string;
 }) {
-    const { runs, openPreview, cancelRun, finishRun } = useProjectRuns();
+    const { runs, openPreview, cancelRun, finishRun, retryRun } = useProjectRuns();
     const router = useRouter();
     const { projectId } = useParams<{ projectId: string }>();
     const resultsHref = `/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/results`;
@@ -61,6 +63,10 @@ export default function RunProgress({
                 router.push(resultsHref);
             }}
             onResults={() => router.push(resultsHref)}
+            onRetry={() => {
+                retryRun(run.id);
+                setNotice("Simulation restarted from Distill. No backend job was submitted.");
+            }}
         />
     );
 }
@@ -72,6 +78,7 @@ function ProgressContent({
     onCancel,
     onComplete,
     onResults,
+    onRetry,
 }: {
     project: ProjectFixture;
     run: SimulatedRun;
@@ -79,10 +86,14 @@ function ProgressContent({
     onCancel: () => void;
     onComplete: () => void;
     onResults: () => void;
+    onRetry: () => void;
 }) {
     const dataset = project.datasets.find((item) => item.id === run.datasetId);
     const active = run.status === "Pending" || run.status === "Running";
+    const retryable = run.status === "Failed" || run.status === "Cancelled";
+    const [confirmingRetry, setConfirmingRetry] = useState(false);
     const operation = run.operations[run.operationIndex];
+    const latestJob = getLatestJob(run);
     const title =
         run.status === "Pending"
             ? "Run Pending"
@@ -101,7 +112,8 @@ function ProgressContent({
             : run.status === "Completed"
               ? `Simulated discovery and scoring are complete. ${run.concepts} fixture concepts are represented; no actual concepts or scores were generated.`
               : run.status === "Failed"
-                ? "Fixture failure: simulated synthesis could not complete. No provider request failed and no real analysis was executed."
+                ? latestJob.error ||
+                  "The run failed without a failure reason. No provider requests occur in this simulation."
                 : run.status === "Cancelled"
                   ? "The simulation has stopped. Remaining operations will not run."
                   : "The simulated pipeline will start shortly. No model requests are made.";
@@ -110,7 +122,7 @@ function ProgressContent({
         ["Dataset", dataset?.name ?? "Unavailable dataset"],
         ["Documents", dataset?.rowCount.toLocaleString("en-US") ?? "—"],
         ["Target concepts", run.configuration.targetConcepts],
-        ["Model", run.model.model],
+        ["Model", modelLabel(run.model.model)],
     ];
     const Icon = active ? LoaderCircle : run.status === "Completed" ? CircleCheck : CircleX;
     return (
@@ -205,7 +217,12 @@ function ProgressContent({
                             )}
                         </div>
                     </div>
-                    <p className="mt-6 text-base text-content-secondary">{description}</p>
+                    <p
+                        role={run.status === "Failed" ? "alert" : undefined}
+                        className="mt-6 text-base whitespace-pre-wrap break-words text-content-secondary"
+                    >
+                        {description}
+                    </p>
                     <div className="mt-6 border-t border-outline pt-5">
                         <div className="rounded-[9px] bg-info-surface p-4">
                             <h3 className="text-sm font-medium">Simulated processing time</h3>
@@ -216,9 +233,9 @@ function ProgressContent({
                         </div>
                     </div>
                     <p className="mt-4 text-xs text-content-secondary">
-                        {run.model.provider} · {run.configuration.synthesisRounds} synthesis{" "}
-                        {run.configuration.synthesisRounds === 1 ? "round" : "rounds"} · Automatic
-                        review {run.configuration.automaticReview ? "on" : "off"}
+                        {providerLabel(run.model.provider)} · {run.configuration.synthesisRounds}{" "}
+                        synthesis {run.configuration.synthesisRounds === 1 ? "round" : "rounds"} ·
+                        Automatic review {run.configuration.automaticReview ? "on" : "off"}
                     </p>
                 </section>
             </div>
@@ -232,6 +249,21 @@ function ProgressContent({
                     >
                         Cancel Run
                     </button>
+                    {run.status !== "Completed" && (
+                        <div>
+                            <button
+                                type="button"
+                                onClick={() => setConfirmingRetry(true)}
+                                disabled={!retryable}
+                                className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-50`}
+                            >
+                                Retry
+                            </button>
+                            <p className="mt-1 text-xs text-content-secondary">
+                                Restarts the entire simulated run from Distill.
+                            </p>
+                        </div>
+                    )}
                     {(active || run.status === "Completed") && (
                         <div>
                             <button
@@ -257,6 +289,8 @@ function ProgressContent({
                 </p>
             </div>
             <p
+                id="run-progress-status"
+                tabIndex={-1}
                 role="status"
                 aria-live="polite"
                 aria-atomic="true"
@@ -265,6 +299,16 @@ function ProgressContent({
                 {notice ||
                     `${run.status}: ${activity}${operation?.round && run.status === "Running" ? `. Round ${operation.round} of ${run.configuration.synthesisRounds}.` : "."}`}
             </p>
+            {confirmingRetry && retryable && (
+                <RetryConfirmationDialog
+                    estimatedCost={run.estimatedCost}
+                    onCancel={() => setConfirmingRetry(false)}
+                    onConfirm={() => {
+                        setConfirmingRetry(false);
+                        onRetry();
+                    }}
+                />
+            )}
         </div>
     );
 }
