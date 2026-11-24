@@ -10,6 +10,7 @@ import { completedFixtureRun, isSimulationPreview, getLatestJob } from "../../ru
 import type { SimulatedRun } from "../../run-simulation";
 import AnalysisProgress from "./AnalysisProgress";
 import { modelLabel, providerLabel } from "@/fixtures/models";
+import RetryConfirmationDialog from "./RetryConfirmationDialog";
 
 const buttonClass =
     "inline-flex min-h-11 items-center justify-center rounded-[8px] border border-outline bg-surface px-5 text-[15px] text-primary hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
@@ -89,6 +90,8 @@ function ProgressContent({
 }) {
     const dataset = project.datasets.find((item) => item.id === run.datasetId);
     const active = run.status === "Pending" || run.status === "Running";
+    const retryable = run.status === "Failed" || run.status === "Cancelled";
+    const [confirmingRetry, setConfirmingRetry] = useState(false);
     const operation = run.operations[run.operationIndex];
     const latestJob = getLatestJob(run);
     const title =
@@ -246,9 +249,14 @@ function ProgressContent({
                     >
                         Cancel Run
                     </button>
-                    {run.status === "Failed" && (
+                    {run.status !== "Completed" && (
                         <div>
-                            <button type="button" onClick={onRetry} className={buttonClass}>
+                            <button
+                                type="button"
+                                onClick={() => setConfirmingRetry(true)}
+                                disabled={!retryable}
+                                className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-50`}
+                            >
                                 Retry
                             </button>
                             <p className="mt-1 text-xs text-content-secondary">
@@ -281,6 +289,8 @@ function ProgressContent({
                 </p>
             </div>
             <p
+                id="run-progress-status"
+                tabIndex={-1}
                 role="status"
                 aria-live="polite"
                 aria-atomic="true"
@@ -289,6 +299,16 @@ function ProgressContent({
                 {notice ||
                     `${run.status}: ${activity}${operation?.round && run.status === "Running" ? `. Round ${operation.round} of ${run.configuration.synthesisRounds}.` : "."}`}
             </p>
+            {confirmingRetry && retryable && (
+                <RetryConfirmationDialog
+                    estimatedCost={run.estimatedCost}
+                    onCancel={() => setConfirmingRetry(false)}
+                    onConfirm={() => {
+                        setConfirmingRetry(false);
+                        onRetry();
+                    }}
+                />
+            )}
         </div>
     );
 }

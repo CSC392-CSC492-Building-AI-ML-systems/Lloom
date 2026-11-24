@@ -178,7 +178,8 @@ export function getLatestJob(run: SimulatedRun): RunJob {
 }
 
 export function retrySimulatedRun(run: SimulatedRun, now: number): SimulatedRun {
-    if (run.status !== "Failed") return run;
+    // Also guards repeated queued actions after the first has moved the run to Pending.
+    if (run.status !== "Failed" && run.status !== "Cancelled") return run;
     return {
         ...run,
         status: "Pending",
