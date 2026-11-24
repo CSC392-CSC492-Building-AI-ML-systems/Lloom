@@ -2,9 +2,20 @@ import type { ProjectFixture } from "@/fixtures/projects";
 import { previewConceptCount } from "@/fixtures/run-results.fixtures";
 import type { RunConfiguration } from "./new/run-configuration";
 import { createDefaultConfiguration, fixtureModelSettings } from "./new/configure-run.fixtures";
+import type { RunCosts } from "@/fixtures/run-costs";
+import { getFixtureEstimatedCost } from "@/fixtures/run-costs.fixtures";
+import type { ModelSettings } from "@/fixtures/models";
 
 export type RunStatus = "Pending" | "Running" | "Completed" | "Failed" | "Cancelled";
 export type Stage = "Distill" | "Cluster" | "Synthesize" | "Score";
+export type RunJob = {
+    id: string;
+    status: RunStatus;
+    step: Stage | null;
+    done: number;
+    total: number;
+    error: string | null;
+};
 export type Operation = {
     stage: Stage;
     title: string;
@@ -12,20 +23,22 @@ export type Operation = {
     duration: number;
     round?: number;
 };
-export type SimulatedRun = {
+export type SimulatedRun = RunCosts & {
     id: string;
     name: string;
     projectId: string;
     datasetId: string;
     created: string;
     configuration: RunConfiguration;
-    model: { provider: string; model: string };
+    model: ModelSettings;
     status: RunStatus;
     operations: Operation[];
     operationIndex: number;
     dueAt: number | null;
     scenario: "success" | "failure";
     concepts: number;
+    attempt: number;
+    failureReason: string | null;
 };
 export const stages: { name: Stage; description: string }[] = [
     { name: "Distill", description: "Extracting representative text excerpts from the dataset." },
@@ -106,6 +119,10 @@ export function createSimulatedRun(
         dueAt: now + 500,
         scenario,
         concepts: 0,
+        estimatedCost: getFixtureEstimatedCost(configuration),
+        actualCost: null,
+        attempt: 1,
+        failureReason: null,
     };
 }
 
@@ -114,7 +131,13 @@ export function advanceRun(run: SimulatedRun, now: number): SimulatedRun {
     while (next.dueAt !== null && next.dueAt <= now) {
         const current = next.operations[next.operationIndex];
         if (next.scenario === "failure" && current?.title === "Synthesizing concepts")
-            return { ...next, status: "Failed", dueAt: null };
+            return {
+                ...next,
+                status: "Failed",
+                dueAt: null,
+                failureReason:
+                    "Simulated synthesis failure. This deterministic preview fails on every attempt; no provider request was made.",
+            };
         const operationIndex = next.operationIndex + 1;
         const operation = next.operations[operationIndex];
         if (!operation) return completeRun(next);
@@ -133,11 +156,39 @@ export function completeRun(run: SimulatedRun): SimulatedRun {
         status: "Completed",
         operationIndex: run.operations.length,
         dueAt: null,
+        failureReason: null,
         concepts: previewConceptCount(
             run.datasetId,
             run.configuration.textColumn,
             Number(run.configuration.targetConcepts),
         ),
+    };
+}
+
+// Projection of the planned latestJob contract; operation timing remains simulation-only.
+export function getLatestJob(run: SimulatedRun): RunJob {
+    return {
+        id: `${run.id}-attempt-${run.attempt}`,
+        status: run.status,
+        step: run.operations[run.operationIndex]?.stage ?? null,
+        done: run.status === "Completed" ? run.operations.length : Math.max(0, run.operationIndex),
+        total: run.operations.length,
+        error: run.status === "Failed" ? run.failureReason : null,
+    };
+}
+
+export function retrySimulatedRun(run: SimulatedRun, now: number): SimulatedRun {
+    if (run.status !== "Failed") return run;
+    return {
+        ...run,
+        status: "Pending",
+        operations: createOperations(run.configuration),
+        operationIndex: -1,
+        dueAt: now + 500,
+        concepts: 0,
+        failureReason: null,
+        actualCost: null,
+        attempt: run.attempt + 1,
     };
 }
 export function stageStatus(run: SimulatedRun, stage: Stage) {
@@ -177,5 +228,12 @@ export function completedFixtureRun(project: ProjectFixture, id: string) {
     if (!dataset) return undefined;
     const configuration = createDefaultConfiguration([dataset]);
     const run = completeRun(createSimulatedRun(project, fixture.id, configuration, 0));
-    return { ...run, name: fixture.name, created: fixture.created, concepts: fixture.concepts };
+    return {
+        ...run,
+        name: fixture.name,
+        created: fixture.created,
+        concepts: fixture.concepts,
+        estimatedCost: fixture.estimatedCost,
+        actualCost: fixture.actualCost,
+    };
 }

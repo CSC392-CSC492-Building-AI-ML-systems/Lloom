@@ -9,6 +9,9 @@ type DatasetUploadProps = {
     onFilesChange: (files: File[]) => void;
     inputRef: RefObject<HTMLInputElement | null>;
     requiredError: boolean;
+    idPrefix: string;
+    embedded?: boolean;
+    submissionError?: { detail: string } | null;
 };
 
 function fileType(file: File) {
@@ -27,18 +30,26 @@ export default function DatasetUpload({
     onFilesChange,
     inputRef,
     requiredError,
+    idPrefix,
+    embedded = false,
+    submissionError = null,
 }: DatasetUploadProps) {
     const [dragging, setDragging] = useState(false);
     const [error, setError] = useState("");
+    const Heading = embedded ? "h3" : "h2";
+    const Subheading = embedded ? "h4" : "h3";
 
     function addFiles(incoming: File[]) {
-        const accepted = incoming.filter((file) => /\.(csv|json|zip)$/i.test(file.name));
-        const rejected = incoming.filter((file) => !/\.(csv|json|zip)$/i.test(file.name));
-        setError(
-            rejected.length
-                ? "Unsupported files were not added. Choose CSV, JSON, or ZIP files."
-                : "",
-        );
+        const accepted: File[] = [];
+        const rejected: string[] = [];
+        for (const file of incoming) {
+            if (!/\.(csv|json)$/i.test(file.name))
+                rejected.push(`${file.name}: unsupported format. Choose CSV or JSON.`);
+            else if (file.size === 0)
+                rejected.push(`${file.name}: the file is empty. Choose a nonempty file.`);
+            else accepted.push(file);
+        }
+        setError(rejected.join("\n"));
         onFilesChange([...files, ...accepted]);
     }
 
@@ -50,17 +61,20 @@ export default function DatasetUpload({
 
     return (
         <section
-            aria-labelledby="import-data-heading"
-            className="min-w-0 rounded-[14px] border border-outline bg-surface p-5"
+            aria-labelledby={`${idPrefix}-heading`}
+            className={
+                embedded ? "min-w-0" : "min-w-0 rounded-[14px] border border-outline bg-surface p-5"
+            }
         >
-            <h2
-                id="import-data-heading"
-                className="border-l-[5px] border-primary pl-3 text-[23px] font-medium"
+            <Heading
+                id={`${idPrefix}-heading`}
+                className={`border-l-[5px] border-primary pl-3 font-medium ${embedded ? "text-lg" : "text-[23px]"}`}
             >
                 Import data
-            </h2>
+            </Heading>
             <p className="mt-2 text-[15px] text-content-secondary">
-                Select the documents LLooM will use to identify concepts.
+                Select CSV or JSON files. Selection checks format and empty files only; contents are
+                not parsed or uploaded.
             </p>
             <div className="mt-4 border-t border-outline pt-4">
                 <div
@@ -77,14 +91,14 @@ export default function DatasetUpload({
                 >
                     <input
                         ref={inputRef}
-                        id="dataset-files"
+                        id={`${idPrefix}-files`}
                         type="file"
                         multiple
-                        accept=".csv,.json,.zip"
+                        accept=".csv,.json"
                         aria-label="Select dataset files (required)"
                         aria-required="true"
-                        aria-invalid={requiredError || undefined}
-                        aria-describedby={`dataset-formats${requiredError || error ? " dataset-error" : ""}`}
+                        aria-invalid={requiredError || !!error || !!submissionError || undefined}
+                        aria-describedby={`${idPrefix}-formats${requiredError || error ? ` ${idPrefix}-error` : ""}${submissionError ? ` ${idPrefix}-submission-error` : ""}`}
                         onChange={(event) => {
                             addFiles(Array.from(event.target.files ?? []));
                             event.target.value = "";
@@ -98,17 +112,32 @@ export default function DatasetUpload({
                     <p className="mt-2 text-[15px] text-content-secondary">
                         or click to browse your device
                     </p>
-                    <p id="dataset-formats" className="mt-3 text-[13px] text-content-secondary">
-                        CSV · JSON · ZIP
+                    <p
+                        id={`${idPrefix}-formats`}
+                        className="mt-3 text-[13px] text-content-secondary"
+                    >
+                        CSV · JSON
                     </p>
                 </div>
                 <div aria-live="polite" className="mt-2 min-h-5 text-sm text-danger">
-                    <p id="dataset-error">
+                    <p
+                        id={`${idPrefix}-error`}
+                        className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
+                    >
                         {error || (requiredError ? "Select at least one dataset file." : "")}
                     </p>
                 </div>
+                {submissionError && (
+                    <p
+                        id={`${idPrefix}-submission-error`}
+                        role="alert"
+                        className="mt-2 text-sm whitespace-pre-wrap break-words text-danger [overflow-wrap:anywhere]"
+                    >
+                        {submissionError.detail}
+                    </p>
+                )}
                 <div className="mt-2 flex items-center justify-between gap-3">
-                    <h3 className="text-lg font-medium">Selected files</h3>
+                    <Subheading className="text-lg font-medium">Selected files</Subheading>
                     <span aria-live="polite" className="text-[13px] text-content-secondary">
                         {files.length} {files.length === 1 ? "file" : "files"}
                     </span>
@@ -121,7 +150,7 @@ export default function DatasetUpload({
                 >
                     <table className="w-full text-left text-[13px]">
                         <caption className="sr-only">
-                            Selected dataset files; files have not been validated or uploaded.
+                            Selected dataset files; contents have not been parsed or uploaded.
                         </caption>
                         <thead className="sticky top-0 z-10 bg-surface-subtle text-[11px] text-content-secondary">
                             <tr>

@@ -20,7 +20,7 @@ const rowClass = "grid items-center gap-2 sm:grid-cols-[144px_minmax(0,1fr)] sm:
 export default function ModelSettingsForm() {
     const [activeTab, setActiveTab] = useState<"provider" | "advanced">("provider");
     const [providerId, setProviderId] = useState("openai");
-    const [model, setModel] = useState("GPT-4o");
+    const [model, setModel] = useState("default");
     // The credential exists only in this component. Never include it in saved settings.
     const [apiKey, setApiKey] = useState(initialDemoCredential);
     const [showKey, setShowKey] = useState(false);
@@ -64,7 +64,7 @@ export default function ModelSettingsForm() {
     function validate() {
         const nextErrors: FieldErrors = {};
         if (!provider) nextErrors.provider = "Select a provider.";
-        if (!provider?.models.includes(model))
+        if (!provider?.models.some((option) => option.value === model))
             nextErrors.model = "Select a model for this provider.";
         if (!apiKey.trim()) nextErrors.key = "Enter a demo API key.";
         setErrors(nextErrors);
@@ -188,7 +188,7 @@ export default function ModelSettingsForm() {
                                         );
                                         resetFeedback();
                                         setProviderId(event.target.value);
-                                        setModel(nextProvider?.models[0] ?? "");
+                                        setModel(nextProvider?.models[0].value ?? "");
                                         setShowKey(false);
                                     }}
                                     aria-invalid={!!errors.provider}
@@ -224,13 +224,21 @@ export default function ModelSettingsForm() {
                                         setModel(event.target.value);
                                     }}
                                     aria-invalid={!!errors.model}
-                                    aria-describedby={errors.model ? "model-error" : undefined}
+                                    aria-describedby={`model-help${errors.model ? " model-error" : ""}`}
                                     className={controlClass}
                                 >
                                     {provider?.models.map((item) => (
-                                        <option key={item}>{item}</option>
+                                        <option key={item.value} value={item.value}>
+                                            {item.label}
+                                        </option>
                                     ))}
                                 </select>
+                                <p id="model-help" className="mt-2 text-xs text-content-secondary">
+                                    LLooM default uses GPT-4o for synthesis and review, and GPT-4o
+                                    mini for distillation and scoring. An explicit model applies to
+                                    all three chat-model stages. Embeddings always use
+                                    text-embedding-3-large.
+                                </p>
                                 {errors.model && (
                                     <p id="model-error" className="mt-1 text-sm text-danger">
                                         {errors.model}
@@ -287,7 +295,7 @@ export default function ModelSettingsForm() {
                             Fixture models and mock connections — use demo credentials only
                         </summary>
                         <p id="mock-settings-help" className="mt-2">
-                            This form never sends or persists the API key. Other and the demo key{" "}
+                            This form never sends or persists the API key. The demo key{" "}
                             <span className="break-all">{failureDemoCredential}</span> simulate
                             failure; other nonempty demo values simulate success.
                         </p>

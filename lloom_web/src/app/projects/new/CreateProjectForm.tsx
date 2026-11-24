@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import type { FormEvent } from "react";
-import DatasetUpload from "./DatasetUpload";
+import DatasetUpload from "@/components/DatasetUpload";
 
 export default function CreateProjectForm() {
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [files, setFiles] = useState<File[]>([]);
     const [submitted, setSubmitted] = useState(false);
+    const [notice, setNotice] = useState("");
     const nameInput = useRef<HTMLInputElement>(null);
     const fileInput = useRef<HTMLInputElement>(null);
     const nameError = submitted && !name.trim();
@@ -18,6 +19,7 @@ export default function CreateProjectForm() {
     function handleSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         setSubmitted(true);
+        setNotice("");
         if (!name.trim()) {
             nameInput.current?.focus();
             return;
@@ -26,8 +28,8 @@ export default function CreateProjectForm() {
             fileInput.current?.focus();
             return;
         }
-        window.alert(
-            "Backend project creation is not yet implemented. Your project has not been created and your files have not been uploaded.",
+        setNotice(
+            "Project creation and uploads are not connected. Nothing was created or uploaded. Your selections remain available to correct or retry.",
         );
     }
 
@@ -98,12 +100,23 @@ export default function CreateProjectForm() {
                     </div>
                 </section>
                 <DatasetUpload
+                    idPrefix="create-dataset"
                     files={files}
                     inputRef={fileInput}
                     requiredError={filesError}
-                    onFilesChange={setFiles}
+                    onFilesChange={(next) => {
+                        setFiles(next);
+                        setNotice("");
+                    }}
                 />
             </div>
+            <p
+                role="status"
+                aria-live="polite"
+                className="mt-4 text-sm text-content-secondary empty:hidden"
+            >
+                {notice}
+            </p>
             <footer
                 aria-label="Project actions"
                 className="mt-5 flex items-center justify-between gap-4"

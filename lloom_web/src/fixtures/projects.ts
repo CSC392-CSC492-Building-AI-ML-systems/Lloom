@@ -1,4 +1,5 @@
 import type { RunConfiguration } from "@/app/projects/[projectId]/runs/new/run-configuration";
+import type { RunCosts } from "./run-costs";
 
 // Illustrative frontend fixtures, not uploaded files or backend records.
 export type DatasetFixture = {
@@ -11,17 +12,17 @@ export type DatasetFixture = {
     sampleRows: Record<string, string>[];
 };
 
-export type RunFixture = {
+export type RunFixture = RunCosts & {
     id: string;
     name: string;
     datasetId: string;
     created: string;
     temporary?: boolean;
 } & (
-    | { status: "Draft"; configuration: RunConfiguration }
-    | { status: "Completed"; concepts: number }
-    | { status: "Pending" | "Running" | "Failed" | "Cancelled"; temporary: true }
-);
+        | { status: "Draft"; configuration: RunConfiguration }
+        | { status: "Completed"; concepts: number }
+        | { status: "Pending" | "Running" | "Failed" | "Cancelled"; temporary: true }
+    );
 
 export type ProjectFixture = {
     id: string;
@@ -91,6 +92,8 @@ export const projectFixtures: ProjectFixture[] = [
                 name: "Run 3 — New experiment",
                 datasetId: "survey-2025",
                 status: "Draft",
+                estimatedCost: 0.42,
+                actualCost: null,
                 created: "2026-10-18",
                 configuration: {
                     datasetId: "survey-2025",
@@ -107,6 +110,8 @@ export const projectFixtures: ProjectFixture[] = [
                 name: "Run 2 — Political posts analysis",
                 datasetId: "political-posts",
                 status: "Completed",
+                estimatedCost: null,
+                actualCost: null,
                 concepts: 6,
                 created: "2026-10-15",
             },
@@ -115,6 +120,8 @@ export const projectFixtures: ProjectFixture[] = [
                 name: "Run 1 — 2025 survey",
                 datasetId: "survey-2025",
                 status: "Completed",
+                estimatedCost: null,
+                actualCost: null,
                 concepts: 18,
                 created: "2026-10-10",
             },
@@ -132,6 +139,8 @@ export const projectFixtures: ProjectFixture[] = [
                 name: "Run 1 — Community themes",
                 datasetId: "political-posts",
                 status: "Completed",
+                estimatedCost: null,
+                actualCost: null,
                 concepts: 9,
                 created: "2026-10-20",
             },

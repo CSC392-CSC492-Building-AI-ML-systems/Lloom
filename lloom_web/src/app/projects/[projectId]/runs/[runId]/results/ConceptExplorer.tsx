@@ -15,6 +15,8 @@ import {
 } from "./results-navigation";
 import ConceptOverviewChart from "./ConceptOverviewChart";
 import ConceptMatrix from "./ConceptMatrix";
+import { formatUsdCost } from "@/fixtures/run-costs";
+import type { RunCosts } from "@/fixtures/run-costs";
 
 const linkClass =
     "inline-flex min-h-11 items-center justify-center rounded-[8px] border border-outline bg-surface px-5 text-[15px] text-primary hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
@@ -27,7 +29,10 @@ export default function ConceptExplorer({
     project: ProjectFixture;
     runId: string;
 }) {
-    const { results, status, temporary, name } = useRunResults(project, runId);
+    const { results, status, temporary, name, estimatedCost, actualCost } = useRunResults(
+        project,
+        runId,
+    );
     return (
         <div className="space-y-6">
             <nav aria-label="Breadcrumb" className="text-[15px]">
@@ -63,6 +68,8 @@ export default function ConceptExplorer({
                 <ExplorerContent
                     key={`${runId}:${results.textColumn}`}
                     results={results}
+                    estimatedCost={estimatedCost}
+                    actualCost={actualCost}
                     datasetName={
                         project.datasets.find((dataset) => dataset.id === results.datasetId)
                             ?.name ?? results.datasetId
@@ -103,7 +110,12 @@ export default function ConceptExplorer({
     );
 }
 
-function ExplorerContent({ results, datasetName }: { results: RunResults; datasetName: string }) {
+function ExplorerContent({
+    results,
+    datasetName,
+    estimatedCost,
+    actualCost,
+}: { results: RunResults; datasetName: string } & RunCosts) {
     const search = useSearchParams();
     const { projectId } = useParams<{ projectId: string }>();
     const filters = readResultQuery(search, results);
@@ -168,6 +180,24 @@ function ExplorerContent({ results, datasetName }: { results: RunResults; datase
                     </div>
                 ))}
             </dl>
+            <section aria-label="Run costs" className={cardClass}>
+                <dl className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <dt className="text-sm text-content-secondary">Estimated cost (USD)</dt>
+                        <dd className="mt-1 text-lg font-medium">
+                            {formatUsdCost(estimatedCost, true)}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt className="text-sm text-content-secondary">Actual cost (USD)</dt>
+                        <dd className="mt-1 text-lg font-medium">{formatUsdCost(actualCost)}</dd>
+                    </div>
+                </dl>
+                <p className="mt-3 text-sm text-content-secondary">
+                    Estimates are illustrative fixtures. Actual cost requires authoritative run
+                    data; no expenditure is measured by this prototype.
+                </p>
+            </section>
             <p
                 role="status"
                 aria-live="polite"

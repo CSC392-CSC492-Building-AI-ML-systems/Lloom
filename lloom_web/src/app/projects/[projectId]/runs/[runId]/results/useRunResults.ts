@@ -28,5 +28,7 @@ export function useRunResults(project: ProjectFixture, runId: string) {
         status,
         temporary,
         name: temporary?.name ?? fixture?.name ?? "Temporary run",
+        estimatedCost: temporary ? temporary.estimatedCost : (fixture?.estimatedCost ?? null),
+        actualCost: temporary ? temporary.actualCost : (fixture?.actualCost ?? null),
     };
 }

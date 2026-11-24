@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useProjectRuns } from "./ProjectRunProvider";
 import type { ProjectFixture, RunFixture } from "@/fixtures/projects";
 import ProjectRunsTable from "./ProjectRunsTable";
+import AddDatasetDialog from "@/components/AddDatasetDialog";
 
 const cardClass = "min-w-0 rounded-[14px] border border-outline bg-surface p-5 md:p-6";
 const headingClass = "border-l-[5px] border-primary pl-3 text-[23px] font-medium";
@@ -21,6 +22,8 @@ export default function ProjectWorkspace({ project: fixtureProject }: { project:
             datasetId: run.datasetId,
             created: run.created,
             temporary: true as const,
+            estimatedCost: run.estimatedCost,
+            actualCost: run.actualCost,
         };
         return run.status === "Completed"
             ? { ...common, status: "Completed", concepts: run.concepts }
@@ -28,6 +31,7 @@ export default function ProjectWorkspace({ project: fixtureProject }: { project:
     });
     const project = { ...fixtureProject, runs: [...fixtureProject.runs, ...temporaryRuns] };
     const [notice, setNotice] = useState("");
+    const [addingDataset, setAddingDataset] = useState(false);
     const latestCompleted = project.runs
         .filter((run) => run.status === "Completed")
         .sort((a, b) => b.created.localeCompare(a.created))[0];
@@ -127,11 +131,7 @@ export default function ProjectWorkspace({ project: fixtureProject }: { project:
                     )}
                     <button
                         type="button"
-                        onClick={() =>
-                            setNotice(
-                                "Adding datasets is not implemented yet. No files have been uploaded.",
-                            )
-                        }
+                        onClick={() => setAddingDataset(true)}
                         className={`mt-4 min-h-11 w-full rounded-[9px] border border-primary px-3 text-[15px] font-medium text-primary hover:bg-surface-subtle ${focusClass}`}
                     >
                         + Add Dataset
@@ -150,6 +150,12 @@ export default function ProjectWorkspace({ project: fixtureProject }: { project:
                 Fixture project preview — datasets and runs are illustrative. Nothing is uploaded or
                 executed.
             </p>
+            {addingDataset && (
+                <AddDatasetDialog
+                    projectName={project.name}
+                    onClose={() => setAddingDataset(false)}
+                />
+            )}
         </div>
     );
 }

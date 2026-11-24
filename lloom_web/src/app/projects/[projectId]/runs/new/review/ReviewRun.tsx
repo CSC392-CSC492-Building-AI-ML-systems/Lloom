@@ -8,6 +8,8 @@ import { useRunConfiguration } from "../RunConfigurationProvider";
 import { fixtureModelSettings } from "../configure-run.fixtures";
 import { validateConfiguration } from "../run-configuration";
 import RunWorkflowSteps from "../RunWorkflowSteps";
+import { formatUsdCost } from "@/fixtures/run-costs";
+import { modelLabel, providerLabel } from "@/fixtures/models";
 
 const secondaryActionClass =
     "flex min-h-[46px] min-w-[115px] items-center justify-center rounded-[9px] border border-outline bg-surface px-5 text-[15px] font-medium hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
@@ -35,6 +37,7 @@ export default function ReviewRun() {
     const { startRun } = useProjectRuns();
     const {
         configuration,
+        estimatedCost,
         datasets: datasetFixtures,
         projectId,
         draftQuery,
@@ -133,11 +136,11 @@ export default function ReviewRun() {
                                     },
                                     {
                                         label: "LLM provider (fixture)",
-                                        value: fixtureModelSettings.provider,
+                                        value: providerLabel(fixtureModelSettings.provider),
                                     },
                                     {
                                         label: "Default model (fixture)",
-                                        value: fixtureModelSettings.model,
+                                        value: modelLabel(fixtureModelSettings.model),
                                     },
                                 ]}
                             />
@@ -183,18 +186,35 @@ export default function ReviewRun() {
                 <Link href="/" className={secondaryActionClass}>
                     Cancel
                 </Link>
-                <div className="flex flex-wrap gap-3">
-                    <Link href={configureHref} className={secondaryActionClass}>
-                        Back
-                    </Link>
-                    <button
-                        type="button"
-                        disabled={!valid}
-                        onClick={handleStartRun}
-                        className="min-h-[46px] min-w-[120px] rounded-[9px] bg-primary px-5 text-[15px] font-medium text-on-primary hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        Start Run
-                    </button>
+                <div className="space-y-3">
+                    <div aria-live="polite" className="text-sm text-content-secondary">
+                        <p>
+                            Estimated cost (USD):{" "}
+                            <strong className="font-medium text-content">
+                                {formatUsdCost(estimatedCost, true)}
+                            </strong>
+                        </p>
+                        <p>
+                            Generation and scoring together. Illustrative fixture estimate; no
+                            charges occur.
+                        </p>
+                        {estimatedCost === null && (
+                            <p>No estimate fixture matches this configuration.</p>
+                        )}
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-3">
+                        <Link href={configureHref} className={secondaryActionClass}>
+                            Back
+                        </Link>
+                        <button
+                            type="button"
+                            disabled={!valid}
+                            onClick={handleStartRun}
+                            className="min-h-[46px] min-w-[120px] rounded-[9px] bg-primary px-5 text-[15px] font-medium text-on-primary hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            Start Run
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
