@@ -9,10 +9,10 @@ from uuid import uuid4
 import pandas as pd
 from fastapi import (
     APIRouter,
-    Depends,
     File, 
     Form, 
     HTTPException, 
+    Request,
     UploadFile, 
     status
 )
@@ -20,11 +20,11 @@ from fastapi import (
 from app.db import (
     create_dataset,
     create_project,
-    get_db,
     get_project,
     list_datasets_for_project,
     list_projects,
     list_runs_for_project,
+    transaction,
     update_project_last_opened,
 )
 
@@ -169,15 +169,13 @@ def serialize_run(row: sqlite3.Row) -> dict[str, Any]:
 # Handler function that creates a project with its uploaded datasets.
 async def create_project_with_datasets(
 
+    request: Request,
     name: Annotated[str, Form()],
 
     #Optional text field description, can be used to add proj description.
     description: Annotated[str, Form()] = "",
     # Optional list of uploaded files
     files: Annotated[list[UploadFile] | None, File()] = None,
-
-    # FastAPI calls get_db, and passes it into the database connection 
-    connection: sqlite3.Connection = Depends(get_db),
 ):
     if not name.strip():
         raise HTTPException(422, "Project name is required.")
@@ -208,50 +206,53 @@ async def create_project_with_datasets(
     # generates random id, for new proj as a string
     project_id = str(uuid4())
 
-    #Creating the project
-    create_project(
-        connection,
-        project_id=project_id,
-        name=name.strip(),
-        description=description.strip(),
-        created_at=created_at,
-        last_opened_at=created_at,
-    )
-
-    # holds clients dataset info
-    datasets = []
-
-    #each parsed file is parsed to save it 
-    for parsed_file in parsed_files:
-        dataset_id = str(uuid4())
-        #shortcut variable
-        metadata = parsed_file["metadata"]
-
-        #Saving one dataset row in database , linked to proj with project_id
-        create_dataset(
+    # Opened after the files are parsed. One transaction: if any insert fails,
+    # the whole project is rolled back
+    with transaction(request.app.state.db_path) as connection:
+        #Creating the project
+        create_project(
             connection,
-            dataset_id=dataset_id,
             project_id=project_id,
-            name=parsed_file["filename"],
-            format=parsed_file["format"],
-            file_blob=parsed_file["contents"],
-            columns=metadata["columns"],
-            text_columns=metadata["textColumns"],
-            row_count=metadata["rowCount"],
-            sample_rows=metadata["sampleRows"],
-            id_column=None,
+            name=name.strip(),
+            description=description.strip(),
             created_at=created_at,
+            last_opened_at=created_at,
         )
 
-        # adds dataset info into response list 
-        datasets.append(
-            {
-                "id": dataset_id,
-                "name": parsed_file["filename"],
-                "format": parsed_file["format"],
-                **metadata,
-            }
-        )
+        # holds clients dataset info
+        datasets = []
+
+        #each parsed file is parsed to save it 
+        for parsed_file in parsed_files:
+            dataset_id = str(uuid4())
+            #shortcut variable
+            metadata = parsed_file["metadata"]
+
+            #Saving one dataset row in database , linked to proj with project_id
+            create_dataset(
+                connection,
+                dataset_id=dataset_id,
+                project_id=project_id,
+                name=parsed_file["filename"],
+                format=parsed_file["format"],
+                file_blob=parsed_file["contents"],
+                columns=metadata["columns"],
+                text_columns=metadata["textColumns"],
+                row_count=metadata["rowCount"],
+                sample_rows=metadata["sampleRows"],
+                id_column=None,
+                created_at=created_at,
+            )
+
+            # adds dataset info into response list 
+            datasets.append(
+                {
+                    "id": dataset_id,
+                    "name": parsed_file["filename"],
+                    "format": parsed_file["format"],
+                    **metadata,
+                }
+            )
 
     # sends back new proj, has empty list of runs, to be populated later
     return {
@@ -268,10 +269,11 @@ async def create_project_with_datasets(
 # Registers below func as a handler for GET /project
 @router.get("")
 
-# Get project handler, database connection from get_db
-def get_projects(
-    connection: sqlite3.Connection = Depends(get_db),
-):
+# Get project handler
+def get_projects(request: Request):
+    with transaction(request.app.state.db_path) as connection:
+        rows = list_projects(connection)
+
     return [
         {
             "id": row["id"],
@@ -280,7 +282,7 @@ def get_projects(
             "created": row["created_at"],
             "lastOpened": row["last_opened_at"],
         }
-        for row in list_projects(connection)
+        for row in rows
     ]
 
 
@@ -292,27 +294,28 @@ def get_projects(
 # Handler that returns one proj, proj id comes from URl
 def get_project_by_id(
     project_id: str,
-    connection: sqlite3.Connection = Depends(get_db),
+    request: Request,
 ):  
-    # searching for proj via proj id 
-    project = get_project(connection, project_id)
+    with transaction(request.app.state.db_path) as connection:
+        # searching for proj via proj id 
+        project = get_project(connection, project_id)
 
-    # No proj found case
-    if project is None:
-        raise HTTPException(404, "Project not found.")
+        # No proj found case
+        if project is None:
+            raise HTTPException(404, "Project not found.")
 
-    #take current time to use as last opened 
-    last_opened = time_now()
-    update_project_last_opened(
-        connection,
-        project_id=project_id,
-        last_opened_at=last_opened,
-    )
+        #take current time to use as last opened 
+        last_opened = time_now()
+        update_project_last_opened(
+            connection,
+            project_id=project_id,
+            last_opened_at=last_opened,
+        )
 
-    # gets all dataset of this proj
-    datasets = list_datasets_for_project(connection, project_id)
-    # gets all run rows of this proj 
-    runs = list_runs_for_project(connection, project_id)
+        # gets all dataset of this proj
+        datasets = list_datasets_for_project(connection, project_id)
+        # gets all run rows of this proj 
+        runs = list_runs_for_project(connection, project_id)
 
     return {
         "id": project["id"],

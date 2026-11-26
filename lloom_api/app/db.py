@@ -1,8 +1,8 @@
 import json
 import sqlite3
-from collections.abc import AsyncGenerator
+from collections.abc import Generator
+from contextlib import contextmanager
 from typing import Any
-from fastapi import Request
 
 # Possible Run Statuses (the same words the frontend shows)
 RUN_STATUS = (
@@ -37,10 +37,7 @@ DATASET_FORMAT = (
 def open_connection(path:str) -> sqlite3.Connection:
     """Open a SQLite connection for one request/worker operation.    
     """
-    # FastAPI may resolve dependencies and synchronous endpoints on different
-    # worker threads. Each request owns its connection, so sharing is not used,
-    # but SQLite must permit that hand-off.
-    connection = sqlite3.connect(path, timeout=30, check_same_thread=False)
+    connection = sqlite3.connect(path,timeout=30)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
@@ -163,23 +160,21 @@ def initialize_database(path: str) -> None:
 
 
 
-#The fastapi dependency gnerator, gives each request its own database connections,
-# also handling the cleanup 
-async def get_db(request: Request) -> AsyncGenerator[sqlite3.Connection, None]:
-    """
-    Fast API runs this function, then route can recieve it with,
-    connection: sqlite.Connection = Depends(get_db)
-    """
-
-    connection = open_connection(request.app.state.db_path)
+# Opens a connection from a path: commits if the block succeeds, rolls back if it
+# raises, and always closes. Routes and the background worker both use it:
+#   with transaction(path) as connection:
+# The commit happens when the block ends, so a route that returns after the block
+# has already saved its changes before the client gets the response.
+@contextmanager
+def transaction(path: str) -> Generator[sqlite3.Connection, None, None]:
+    connection = open_connection(path)
 
     try:
         yield connection
         connection.commit()
-    except Exception: #Checks if any exceptions ocurr, cleanup
+    except Exception:
         connection.rollback()
         raise
-
     finally:
         connection.close()
 
@@ -289,6 +284,17 @@ def get_dataset(connection: sqlite3.Connection, dataset_id: str) -> sqlite3.Row 
     ).fetchone()
 
 
+# Creates a list of the datasets used by specified project
+def list_datasets_for_project(connection: sqlite3.Connection,project_id: str,) -> list[sqlite3.Row]:
+    return connection.execute(
+        """
+        SELECT * FROM datasets
+        WHERE project_id = ?
+        ORDER BY created_at DESC
+        """,
+        (project_id,),).fetchall()
+
+
 
 # Now the Run functions 
 
@@ -351,6 +357,17 @@ def get_run(connection: sqlite3.Connection, run_id: str) -> sqlite3.Row | None:
         "SELECT * FROM runs WHERE id = ?",
         (run_id,),
     ).fetchone()
+
+
+# Creates a list of the runs used by specified project
+def list_runs_for_project(connection:sqlite3.Connection,project_id:str,) -> list[sqlite3.Row]:
+    return connection.execute(
+        """
+        SELECT * FROM runs
+        WHERE project_id = ?
+        ORDER BY created_at DESC
+        """,
+        (project_id,),).fetchall()
 
 
 def update_run_status(
@@ -499,27 +516,3 @@ def save_settings(connection: sqlite3.Connection, *, provider: str, model: str, 
         """,
         (provider, model, api_key),
     )
-
-
-#B3 Helpers proj 
-
-
-# Creates a list of the datasets used by specified project
-def list_datasets_for_project(connection: sqlite3.Connection,project_id: str,) -> list[sqlite3.Row]:
-    return connection.execute(
-        """
-        SELECT * FROM datasets
-        WHERE project_id = ?
-        ORDER BY created_at DESC
-        """,
-        (project_id,),).fetchall()
-
-# Creates a list of the runs used by specified project
-def list_runs_for_project(connection:sqlite3.Connection,project_id:str,) -> list[sqlite3.Row]:
-    return connection.execute(
-        """
-        SELECT * FROM runs
-        WHERE project_id = ?
-        ORDER BY created_at DESC
-        """,
-        (project_id,),).fetchall()
