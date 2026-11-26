@@ -41,6 +41,10 @@ def job_response(job) -> dict:
 def create_app(get_models: Callable[[], dict] = get_models) -> FastAPI:
     app = FastAPI(title="LLooM API")
 
+    # Project and dataset upload routes
+    from app.projects import router as projects_router
+
+    app.include_router(projects_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=FRONTEND_ORIGINS,

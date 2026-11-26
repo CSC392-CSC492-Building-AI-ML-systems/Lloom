@@ -284,6 +284,17 @@ def get_dataset(connection: sqlite3.Connection, dataset_id: str) -> sqlite3.Row 
     ).fetchone()
 
 
+# Creates a list of the datasets used by specified project
+def list_datasets_for_project(connection: sqlite3.Connection,project_id: str,) -> list[sqlite3.Row]:
+    return connection.execute(
+        """
+        SELECT * FROM datasets
+        WHERE project_id = ?
+        ORDER BY created_at DESC
+        """,
+        (project_id,),).fetchall()
+
+
 
 # Now the Run functions 
 
@@ -346,6 +357,17 @@ def get_run(connection: sqlite3.Connection, run_id: str) -> sqlite3.Row | None:
         "SELECT * FROM runs WHERE id = ?",
         (run_id,),
     ).fetchone()
+
+
+# Creates a list of the runs used by specified project
+def list_runs_for_project(connection:sqlite3.Connection,project_id:str,) -> list[sqlite3.Row]:
+    return connection.execute(
+        """
+        SELECT * FROM runs
+        WHERE project_id = ?
+        ORDER BY created_at DESC
+        """,
+        (project_id,),).fetchall()
 
 
 def update_run_status(
