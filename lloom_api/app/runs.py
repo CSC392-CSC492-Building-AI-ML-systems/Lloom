@@ -123,20 +123,23 @@ def build_draft(config: RunRequest, dataset: sqlite3.Row, models: dict) -> dict[
     }
 
 
-# Generation plus scoring, in US dollars, or None if either has no price
-def estimated_cost(run: sqlite3.Row) -> float | None:
-    generation = json.loads(run["generation_estimate_json"])
-    score = json.loads(run["score_estimate_json"])
-    if not (generation["available"] and score["available"]):
-        return None
-    return generation["total"] + score["total"]
+# The frontend's RunCosts, in US dollars. Both are None without a priced estimate:
+# a model with no price records a cost of 0. actualCost is written by B7.
+def run_costs(run: sqlite3.Row) -> dict[str, float | None]:
+    generation = json.loads(run["generation_estimate_json"] or "null")
+    score = json.loads(run["score_estimate_json"] or "null")
+    if not (generation and score and generation["available"] and score["available"]):
+        return {"estimatedCost": None, "actualCost": None}
+    return {
+        "estimatedCost": generation["total"] + score["total"],
+        "actualCost": run["cost_so_far"] if run["status"] == "Completed" else None,
+    }
 
 
 # The run shape the frontend reads (POST, PATCH and GET all return it)
 def run_response(connection, run: sqlite3.Row) -> dict[str, Any]:
     config = json.loads(run["config_json"])
     job = get_latest_job(connection, run["id"])
-    cost = estimated_cost(run)
     return {
         "id": run["id"],
         "name": run["name"],
@@ -145,9 +148,7 @@ def run_response(connection, run: sqlite3.Row) -> dict[str, Any]:
         "created": run["created_at"],
         "status": run["status"],
         "configuration": config,
-        "estimatedCost": cost,
-        # Written by B7. A model with no price records 0, so it is only shown with an estimate.
-        "actualCost": run["cost_so_far"] if run["status"] == "Completed" and cost is not None else None,
+        **run_costs(run),
         # Recorded by B7 when the run starts
         "model": config.get("model"),
         "latestJob": job_response(job) if job else None,

@@ -252,6 +252,8 @@ def test_get_project_returns_draft_run_with_configuration(api_client):
         "datasetId": dataset_id,
         "created": TIMESTAMP,
         "status": "Draft",
+        "estimatedCost": None,
+        "actualCost": None,
         "configuration": configuration,
     }
 
@@ -292,6 +294,8 @@ def test_get_project_returns_completed_run_fixture_shape(api_client):
             "datasetId": dataset_id,
             "created": TIMESTAMP,
             "status": "Completed",
+            "estimatedCost": None,
+            "actualCost": None,
             "concepts": 0,
         }
     ]

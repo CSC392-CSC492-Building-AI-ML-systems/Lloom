@@ -83,6 +83,14 @@ def test_get_returns_the_run_before_any_job(client):
     assert body["actualCost"] is None
 
 
+def test_project_lists_the_run_with_its_costs(client):
+    run = create_draft(client)
+    listed = client.get("/projects/p1").json()["runs"][0]
+    assert listed["id"] == run["id"]
+    assert listed["estimatedCost"] > 0
+    assert listed["actualCost"] is None
+
+
 def test_completed_run_returns_its_actual_cost(client):
     run = create_draft(client)
     set_status(client, run["id"], "Completed")
