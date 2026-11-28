@@ -2,19 +2,28 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Header from "@/components/Header";
-import { getProjectFixture } from "@/fixtures/projects";
+import { resolveProject } from "./project-data";
+import { ApiError } from "@/lib/api/errors";
+import FixtureProjectWorkspace from "./FixtureProjectWorkspace";
 import ProjectWorkspace from "./ProjectWorkspace";
 
 type Props = { params: Promise<{ projectId: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-    const project = getProjectFixture((await params).projectId);
-    return { title: `${project?.name ?? "Project not found"} | LLooM Web` };
+    try {
+        const { project } = await resolveProject((await params).projectId);
+        return { title: `${project.name} | LLooM Web` };
+    } catch {
+        return { title: "Project | LLooM Web" };
+    }
 }
 
 export default async function ProjectPage({ params }: Props) {
-    const project = getProjectFixture((await params).projectId);
-    if (!project) notFound();
+    const resolved = await resolveProject((await params).projectId).catch((error: unknown) => {
+        if (error instanceof ApiError && error.status === 404) notFound();
+        throw error;
+    });
+    const { project } = resolved;
     return (
         <div className="flex min-h-dvh flex-col">
             <Header showSearch={false} />
@@ -40,7 +49,11 @@ export default async function ProjectPage({ params }: Props) {
                         </li>
                     </ol>
                 </nav>
-                <ProjectWorkspace project={project} />
+                {resolved.source === "demo" ? (
+                    <FixtureProjectWorkspace project={resolved.project} />
+                ) : (
+                    <ProjectWorkspace project={resolved.project} />
+                )}
             </main>
         </div>
     );

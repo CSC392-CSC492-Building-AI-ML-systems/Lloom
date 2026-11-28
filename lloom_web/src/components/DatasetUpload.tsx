@@ -3,10 +3,14 @@
 import { FileText, Upload, X } from "lucide-react";
 import { useState } from "react";
 import type { DragEvent, RefObject } from "react";
+import type { SelectedDataset } from "@/lib/datasets/selection";
 
 type DatasetUploadProps = {
-    files: File[];
-    onFilesChange: (files: File[]) => void;
+    disabled?: boolean;
+    creation?: boolean;
+    files: SelectedDataset[];
+    onFilesAdded: (files: File[]) => void;
+    onFileRemoved: (id: string) => void;
     inputRef: RefObject<HTMLInputElement | null>;
     requiredError: boolean;
     idPrefix: string;
@@ -27,30 +31,25 @@ function formatSize(bytes: number) {
 
 export default function DatasetUpload({
     files,
-    onFilesChange,
+    onFilesAdded,
+    onFileRemoved,
     inputRef,
     requiredError,
     idPrefix,
     embedded = false,
     submissionError = null,
+    disabled = false,
+    creation = false,
 }: DatasetUploadProps) {
     const [dragging, setDragging] = useState(false);
-    const [error, setError] = useState("");
+    const hasErrors = files.some((file) => file.status === "Error");
+    const validating = files.some((file) => file.status === "Validating");
     const Heading = embedded ? "h3" : "h2";
     const Subheading = embedded ? "h4" : "h3";
 
     function addFiles(incoming: File[]) {
-        const accepted: File[] = [];
-        const rejected: string[] = [];
-        for (const file of incoming) {
-            if (!/\.(csv|json)$/i.test(file.name))
-                rejected.push(`${file.name}: unsupported format. Choose CSV or JSON.`);
-            else if (file.size === 0)
-                rejected.push(`${file.name}: the file is empty. Choose a nonempty file.`);
-            else accepted.push(file);
-        }
-        setError(rejected.join("\n"));
-        onFilesChange([...files, ...accepted]);
+        if (disabled) return;
+        onFilesAdded(incoming);
     }
 
     function handleDrop(event: DragEvent<HTMLDivElement>) {
@@ -73,8 +72,11 @@ export default function DatasetUpload({
                 Import data
             </Heading>
             <p className="mt-2 text-[15px] text-content-secondary">
-                Select CSV or JSON files. Selection checks format and empty files only; contents are
-                not parsed or uploaded.
+                Select CSV or JSON files. Valid means client checks passed; backend acceptance is
+                not guaranteed.{" "}
+                {creation
+                    ? "The backend validates again when you create the project."
+                    : "This demonstration does not upload files."}
             </p>
             <div className="mt-4 border-t border-outline pt-4">
                 <div
@@ -93,12 +95,13 @@ export default function DatasetUpload({
                         ref={inputRef}
                         id={`${idPrefix}-files`}
                         type="file"
+                        disabled={disabled}
                         multiple
                         accept=".csv,.json"
                         aria-label="Select dataset files (required)"
                         aria-required="true"
-                        aria-invalid={requiredError || !!error || !!submissionError || undefined}
-                        aria-describedby={`${idPrefix}-formats${requiredError || error ? ` ${idPrefix}-error` : ""}${submissionError ? ` ${idPrefix}-submission-error` : ""}`}
+                        aria-invalid={requiredError || hasErrors || !!submissionError || undefined}
+                        aria-describedby={`${idPrefix}-formats${requiredError || hasErrors || validating ? ` ${idPrefix}-error` : ""}${submissionError ? ` ${idPrefix}-submission-error` : ""}`}
                         onChange={(event) => {
                             addFiles(Array.from(event.target.files ?? []));
                             event.target.value = "";
@@ -119,12 +122,21 @@ export default function DatasetUpload({
                         CSV · JSON
                     </p>
                 </div>
-                <div aria-live="polite" className="mt-2 min-h-5 text-sm text-danger">
+                <div
+                    aria-live="polite"
+                    className={`mt-2 min-h-5 text-sm ${hasErrors || requiredError ? "text-danger" : "text-content-secondary"}`}
+                >
                     <p
                         id={`${idPrefix}-error`}
                         className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
                     >
-                        {error || (requiredError ? "Select at least one dataset file." : "")}
+                        {hasErrors
+                            ? "Remove or replace files with errors to continue."
+                            : validating
+                              ? "Checking selected files?"
+                              : requiredError
+                                ? "Select at least one dataset file."
+                                : ""}
                     </p>
                 </div>
                 {submissionError && (
@@ -150,7 +162,8 @@ export default function DatasetUpload({
                 >
                     <table className="w-full text-left text-[13px]">
                         <caption className="sr-only">
-                            Selected dataset files; contents have not been parsed or uploaded.
+                            Selected dataset files and client validation results; files have not
+                            been uploaded.
                         </caption>
                         <thead className="sticky top-0 z-10 bg-surface-subtle text-[11px] text-content-secondary">
                             <tr>
@@ -167,7 +180,7 @@ export default function DatasetUpload({
                                 )}
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody aria-live="polite">
                             {files.length === 0 ? (
                                 <tr>
                                     <td colSpan={5} className="px-4 py-5 text-content-secondary">
@@ -175,11 +188,8 @@ export default function DatasetUpload({
                                     </td>
                                 </tr>
                             ) : (
-                                files.map((file, index) => (
-                                    <tr
-                                        key={`${file.name}-${file.lastModified}-${file.size}-${index}`}
-                                        className="border-t border-outline"
-                                    >
+                                files.map(({ id, file, status, message }) => (
+                                    <tr key={id} className="border-t border-outline">
                                         <td className="px-3 py-2">
                                             <div className="flex items-center gap-2">
                                                 <FileText
@@ -198,20 +208,22 @@ export default function DatasetUpload({
                                         <td className="px-3 py-2 whitespace-nowrap text-content-secondary">
                                             {formatSize(file.size)}
                                         </td>
-                                        <td className="px-3 py-2 text-content-secondary">
-                                            Selected
+                                        <td
+                                            className={`px-3 py-2 ${status === "Error" ? "text-danger" : "text-content-secondary"}`}
+                                        >
+                                            <span>{status}</span>
+                                            {message && (
+                                                <p className="mt-1 min-w-40 max-w-72 break-words">
+                                                    {message}
+                                                </p>
+                                            )}
                                         </td>
                                         <td className="px-3 py-2">
                                             <button
                                                 type="button"
+                                                disabled={disabled}
                                                 aria-label={`Remove ${file.name}`}
-                                                onClick={() =>
-                                                    onFilesChange(
-                                                        files.filter(
-                                                            (_, fileIndex) => fileIndex !== index,
-                                                        ),
-                                                    )
-                                                }
+                                                onClick={() => onFileRemoved(id)}
                                                 className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                                             >
                                                 <X size={18} aria-hidden="true" />

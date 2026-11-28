@@ -1,4 +1,5 @@
 import { FileText } from "lucide-react";
+import Link from "next/link";
 
 const dateFormatter = new Intl.DateTimeFormat("en-CA", {
     year: "numeric",
@@ -10,15 +11,20 @@ const dateFormatter = new Intl.DateTimeFormat("en-CA", {
 });
 
 type RecentProjectItemProps = {
+    id: string;
     name: string;
     lastOpened: Date;
 };
 
-export default function RecentProjectItem({ name, lastOpened }: RecentProjectItemProps) {
+export default function RecentProjectItem({ id, name, lastOpened }: RecentProjectItemProps) {
     const formattedDate = dateFormatter.format(lastOpened);
 
     return (
-        <div className="flex min-h-[80px] items-center gap-4 border-b border-outline px-5 py-3 last:border-b-0">
+        <Link
+            href={`/projects/${encodeURIComponent(id)}`}
+            prefetch={false}
+            className="flex min-h-[80px] items-center gap-4 border-b border-outline px-5 py-3 last:border-b-0 hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
+        >
             <div
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-placeholder-surface"
                 aria-hidden="true"
@@ -31,6 +37,6 @@ export default function RecentProjectItem({ name, lastOpened }: RecentProjectIte
 
                 <span className="text-sm text-content-secondary">Last opened: {formattedDate}</span>
             </div>
-        </div>
+        </Link>
     );
 }

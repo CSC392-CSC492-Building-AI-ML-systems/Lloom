@@ -7,9 +7,7 @@ export default function ProjectNotFound() {
             <Header showSearch={false} />
             <main className="px-4 py-6 md:px-10">
                 <h1 className="text-2xl font-medium">Project not found</h1>
-                <p className="mt-3 text-content-secondary">
-                    This project is not available in the prototype fixtures.
-                </p>
+                <p className="mt-3 text-content-secondary">This project could not be found.</p>
                 <Link
                     href="/"
                     className="mt-5 inline-flex min-h-11 items-center rounded text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary"

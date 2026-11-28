@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import DatasetUpload from "./DatasetUpload";
+import useDatasetSelection from "@/hooks/useDatasetSelection";
 
-// Selection-only preview. No project mutation, file parsing, or upload request occurs.
+// Locally validated selection preview. No project mutation or upload request occurs.
 export default function AddDatasetDialog({
     projectName,
     onClose,
@@ -15,7 +16,7 @@ export default function AddDatasetDialog({
     const dialogRef = useRef<HTMLDialogElement>(null);
     const closeRef = useRef<HTMLButtonElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
-    const [files, setFiles] = useState<File[]>([]);
+    const { entries: files, addFiles, removeFile, ready, getFiles } = useDatasetSelection();
     const [submitted, setSubmitted] = useState(false);
     const [notice, setNotice] = useState("");
     useEffect(() => {
@@ -81,11 +82,13 @@ export default function AddDatasetDialog({
                 className="mt-5"
                 onSubmit={(event) => {
                     event.preventDefault();
+                    const selectedFiles = getFiles();
                     setSubmitted(true);
-                    if (!files.length) {
+                    if (!selectedFiles.length) {
                         inputRef.current?.focus();
                         return;
                     }
+                    if (!selectedFiles.every((file) => file.status === "Valid")) return;
                     setNotice(
                         "Dataset uploads are not connected. Nothing was uploaded or added to this project. Your selections remain available to correct or retry.",
                     );
@@ -97,8 +100,12 @@ export default function AddDatasetDialog({
                     files={files}
                     inputRef={inputRef}
                     requiredError={submitted && files.length === 0}
-                    onFilesChange={(next) => {
-                        setFiles(next);
+                    onFilesAdded={(incoming) => {
+                        addFiles(incoming);
+                        setNotice("");
+                    }}
+                    onFileRemoved={(id) => {
+                        removeFile(id);
                         setNotice("");
                     }}
                 />
@@ -119,7 +126,8 @@ export default function AddDatasetDialog({
                     </button>
                     <button
                         type="submit"
-                        className="min-h-11 rounded-lg bg-primary px-4 text-on-primary hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                        disabled={!ready}
+                        className="min-h-11 rounded-lg bg-primary px-4 text-on-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                     >
                         Add Dataset
                     </button>

@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { FileText, Settings } from "lucide-react";
 import { useState } from "react";
-import { useProjectRuns } from "./ProjectRunProvider";
-import type { ProjectFixture, RunFixture } from "@/fixtures/projects";
+import type { Dataset } from "@/lib/api/types";
+import type { WorkspaceRun } from "./ProjectRunsTable";
 import ProjectRunsTable from "./ProjectRunsTable";
 import AddDatasetDialog from "@/components/AddDatasetDialog";
 
@@ -13,23 +13,21 @@ const headingClass = "border-l-[5px] border-primary pl-3 text-[23px] font-medium
 const focusClass =
     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
 
-export default function ProjectWorkspace({ project: fixtureProject }: { project: ProjectFixture }) {
-    const { runs } = useProjectRuns();
-    const temporaryRuns: RunFixture[] = runs.map((run) => {
-        const common = {
-            id: run.id,
-            name: run.name,
-            datasetId: run.datasetId,
-            created: run.created,
-            temporary: true as const,
-            estimatedCost: run.estimatedCost,
-            actualCost: run.actualCost,
-        };
-        return run.status === "Completed"
-            ? { ...common, status: "Completed", concepts: run.concepts }
-            : { ...common, status: run.status };
-    });
-    const project = { ...fixtureProject, runs: [...fixtureProject.runs, ...temporaryRuns] };
+export type WorkspaceProject = {
+    id: string;
+    name: string;
+    description: string;
+    datasets: Dataset[];
+    runs: WorkspaceRun[];
+};
+
+export default function ProjectWorkspace({
+    project,
+    demo = false,
+}: {
+    project: WorkspaceProject;
+    demo?: boolean;
+}) {
     const [notice, setNotice] = useState("");
     const [addingDataset, setAddingDataset] = useState(false);
     const latestCompleted = project.runs
@@ -66,12 +64,21 @@ export default function ProjectWorkspace({ project: fixtureProject }: { project:
                         <Settings size={18} aria-hidden="true" />
                         Project Settings
                     </button>
-                    <Link
-                        href={`/projects/${project.id}/runs/new`}
-                        className={`flex min-h-[46px] min-w-[154px] items-center justify-center rounded-[9px] bg-primary px-4 text-[15px] font-medium text-on-primary hover:opacity-90 ${focusClass}`}
-                    >
-                        New Run
-                    </Link>
+                    {demo ? (
+                        <Link
+                            href={`/projects/${project.id}/runs/new`}
+                            className={`flex min-h-[46px] min-w-[154px] items-center justify-center rounded-[9px] bg-primary px-4 text-[15px] font-medium text-on-primary hover:opacity-90 ${focusClass}`}
+                        >
+                            New Run
+                        </Link>
+                    ) : (
+                        <button
+                            disabled
+                            className="flex min-h-[46px] min-w-[154px] items-center justify-center rounded-[9px] bg-primary px-4 text-[15px] font-medium text-on-primary opacity-50"
+                        >
+                            New Run
+                        </button>
+                    )}
                 </div>
             </div>
             <div className="grid gap-6 sm:grid-cols-3">
@@ -91,7 +98,7 @@ export default function ProjectWorkspace({ project: fixtureProject }: { project:
                     <p className="mt-2 text-[15px] text-content-secondary">
                         View previous analyses and their results.
                     </p>
-                    <ProjectRunsTable project={project} />
+                    <ProjectRunsTable project={project} demo={demo} />
                 </section>
                 <section aria-labelledby="workspace-datasets-heading" className={cardClass}>
                     <h2 id="workspace-datasets-heading" className={headingClass}>
@@ -112,7 +119,7 @@ export default function ProjectWorkspace({ project: fixtureProject }: { project:
                                         className="shrink-0 text-content-secondary"
                                         aria-hidden="true"
                                     />
-                                    <div className="min-w-0">
+                                    <div className="min-w-0 flex-1">
                                         <h3 className="text-sm font-medium break-words">
                                             {dataset.name}
                                         </h3>
@@ -120,22 +127,104 @@ export default function ProjectWorkspace({ project: fixtureProject }: { project:
                                             {dataset.rowCount.toLocaleString("en-US")} documents ·{" "}
                                             {dataset.format}
                                         </p>
+                                        {!demo && (
+                                            <details className="mt-2 text-[13px] text-content-secondary">
+                                                <summary className="cursor-pointer rounded text-primary focus-visible:outline-2 focus-visible:outline-primary">
+                                                    Columns and preview
+                                                </summary>
+                                                <p className="mt-2 break-words">
+                                                    Columns: {dataset.columns.join(", ") || "None"}
+                                                </p>
+                                                <p className="mt-1 break-words">
+                                                    Text columns:{" "}
+                                                    {dataset.textColumns.join(", ") || "None"}
+                                                </p>
+                                                {dataset.sampleRows.length ? (
+                                                    <div
+                                                        role="region"
+                                                        aria-label={`${dataset.name} preview`}
+                                                        tabIndex={0}
+                                                        className="mt-2 max-h-48 overflow-auto rounded border border-outline focus-visible:outline-2 focus-visible:outline-primary"
+                                                    >
+                                                        <table className="w-full text-left text-xs">
+                                                            <caption className="sr-only">
+                                                                First sample rows of {dataset.name}
+                                                            </caption>
+                                                            <thead>
+                                                                <tr>
+                                                                    {dataset.columns.map(
+                                                                        (column) => (
+                                                                            <th
+                                                                                key={column}
+                                                                                scope="col"
+                                                                                className="px-2 py-1 font-medium"
+                                                                            >
+                                                                                {column}
+                                                                            </th>
+                                                                        ),
+                                                                    )}
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {dataset.sampleRows.map(
+                                                                    (row, index) => (
+                                                                        <tr
+                                                                            key={index}
+                                                                            className="border-t border-outline"
+                                                                        >
+                                                                            {dataset.columns.map(
+                                                                                (column) => (
+                                                                                    <td
+                                                                                        key={column}
+                                                                                        className="max-w-64 min-w-24 px-2 py-1 break-words"
+                                                                                    >
+                                                                                        {row[
+                                                                                            column
+                                                                                        ] ?? ""}
+                                                                                    </td>
+                                                                                ),
+                                                                            )}
+                                                                        </tr>
+                                                                    ),
+                                                                )}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                ) : (
+                                                    <p className="mt-2">
+                                                        No sample rows available.
+                                                    </p>
+                                                )}
+                                            </details>
+                                        )}
                                     </div>
                                 </li>
                             ))}
                         </ul>
                     ) : (
                         <p className="mt-4 text-[15px] text-content-secondary">
-                            No datasets yet. Dataset uploads are not available in this prototype.
+                            No datasets yet. Additional dataset uploads are not connected yet.
                         </p>
                     )}
                     <button
                         type="button"
-                        onClick={() => setAddingDataset(true)}
-                        className={`mt-4 min-h-11 w-full rounded-[9px] border border-primary px-3 text-[15px] font-medium text-primary hover:bg-surface-subtle ${focusClass}`}
+                        disabled={!demo}
+                        aria-describedby={!demo ? "add-dataset-unavailable" : undefined}
+                        onClick={() => {
+                            if (demo) setAddingDataset(true);
+                        }}
+                        className={`mt-4 disabled:cursor-not-allowed disabled:opacity-50 min-h-11 w-full rounded-[9px] border border-primary px-3 text-[15px] font-medium text-primary hover:bg-surface-subtle ${focusClass}`}
                     >
                         + Add Dataset
                     </button>
+                    {!demo && (
+                        <p
+                            id="add-dataset-unavailable"
+                            className="mt-2 text-sm text-content-secondary"
+                        >
+                            Adding datasets to existing projects is not yet supported.
+                        </p>
+                    )}
                 </section>
             </div>
             <p
@@ -147,10 +236,11 @@ export default function ProjectWorkspace({ project: fixtureProject }: { project:
                 {notice}
             </p>
             <p className="text-xs text-content-secondary">
-                Fixture project preview — datasets and runs are illustrative. Nothing is uploaded or
-                executed.
+                {demo
+                    ? "Fixture project preview — datasets and runs are illustrative. Nothing is uploaded or executed."
+                    : "Run creation, execution, and results are not connected yet. Adding datasets to existing projects is not yet supported."}
             </p>
-            {addingDataset && (
+            {demo && addingDataset && (
                 <AddDatasetDialog
                     projectName={project.name}
                     onClose={() => setAddingDataset(false)}

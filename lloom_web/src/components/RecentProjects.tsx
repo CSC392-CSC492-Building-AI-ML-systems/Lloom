@@ -29,12 +29,10 @@ async function ProjectList() {
     }
     return (
         <>
-            <p className="border-b border-outline px-5 py-3 text-sm text-content-secondary">
-                Opening backend projects will be available after workspace integration.
-            </p>
             {projects.map((project) => (
                 <RecentProjectItem
                     key={project.id}
+                    id={project.id}
                     name={project.name}
                     lastOpened={new Date(project.lastOpened)}
                 />

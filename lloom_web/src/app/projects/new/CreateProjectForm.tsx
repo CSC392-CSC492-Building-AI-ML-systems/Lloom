@@ -1,14 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useRef, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import DatasetUpload from "@/components/DatasetUpload";
+import { errorDetail } from "@/lib/api/errors";
+import useDatasetSelection from "@/hooks/useDatasetSelection";
 
 export default function CreateProjectForm() {
+    const router = useRouter();
+    const inFlight = useRef(false);
+    const [uploading, setUploading] = useState(false);
+    const [navigating, startNavigation] = useTransition();
+    const pending = uploading || navigating;
+    const [submissionError, setSubmissionError] = useState<string | null>(null);
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
-    const [files, setFiles] = useState<File[]>([]);
+    const {
+        entries: files,
+        addFiles,
+        removeFile,
+        ready,
+        getFiles,
+        associateBackendError,
+    } = useDatasetSelection();
     const [submitted, setSubmitted] = useState(false);
     const [notice, setNotice] = useState("");
     const nameInput = useRef<HTMLInputElement>(null);
@@ -16,26 +32,78 @@ export default function CreateProjectForm() {
     const nameError = submitted && !name.trim();
     const filesError = submitted && files.length === 0;
 
-    function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    async function handleSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
+        if (inFlight.current || navigating) return;
+        const selectedFiles = getFiles();
         setSubmitted(true);
         setNotice("");
+        setSubmissionError(null);
         if (!name.trim()) {
             nameInput.current?.focus();
             return;
         }
-        if (files.length === 0) {
+        if (selectedFiles.length === 0) {
             fileInput.current?.focus();
             return;
         }
-        setNotice(
-            "Project creation and uploads are not connected. Nothing was created or uploaded. Your selections remain available to correct or retry.",
-        );
+        if (!selectedFiles.every((file) => file.status === "Valid")) return;
+        inFlight.current = true;
+        setUploading(true);
+        const form = new FormData();
+        form.append("name", name.trim());
+        form.append("description", description.trim());
+        selectedFiles.forEach(({ file }) => form.append("files", file));
+        try {
+            const response = await fetch("/api/projects", { method: "POST", body: form });
+            const body: unknown = await response.json().catch(() => null);
+            if (!response.ok) {
+                const detail =
+                    errorDetail(body) || `Project creation failed (HTTP ${response.status}).`;
+                if (
+                    (response.status === 422 || response.status === 415) &&
+                    associateBackendError(detail)
+                )
+                    return;
+                setSubmissionError(
+                    response.status >= 500
+                        ? `${detail} The project may have been created. Check Recent Projects before retrying.`
+                        : detail,
+                );
+                return;
+            }
+            if (
+                typeof body !== "object" ||
+                body === null ||
+                !("id" in body) ||
+                typeof body.id !== "string" ||
+                !body.id
+            ) {
+                setSubmissionError(
+                    "The upload response was invalid. Check Recent Projects before retrying; the project may have been created.",
+                );
+                return;
+            }
+            setNotice("Project created. Opening workspace…");
+            const id = body.id;
+            startNavigation(() => router.push(`/projects/${encodeURIComponent(id)}`));
+            return;
+        } catch {
+            setSubmissionError(
+                "Unable to complete the upload. Check your connection and Recent Projects before retrying; the project may have been created.",
+            );
+        } finally {
+            inFlight.current = false;
+            setUploading(false);
+        }
     }
 
     return (
-        <form noValidate onSubmit={handleSubmit} className="mt-5">
-            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,482fr)_minmax(0,854fr)] lg:items-stretch">
+        <form noValidate onSubmit={handleSubmit} aria-busy={pending} className="mt-5">
+            <fieldset
+                disabled={pending}
+                className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,482fr)_minmax(0,854fr)] lg:items-stretch"
+            >
                 <section
                     aria-labelledby="project-details-heading"
                     className="min-w-0 rounded-[14px] border border-outline bg-surface p-5"
@@ -100,16 +168,25 @@ export default function CreateProjectForm() {
                     </div>
                 </section>
                 <DatasetUpload
+                    disabled={pending}
+                    creation
+                    submissionError={submissionError ? { detail: submissionError } : null}
                     idPrefix="create-dataset"
                     files={files}
                     inputRef={fileInput}
                     requiredError={filesError}
-                    onFilesChange={(next) => {
-                        setFiles(next);
+                    onFilesAdded={(incoming) => {
+                        addFiles(incoming);
                         setNotice("");
+                        setSubmissionError(null);
+                    }}
+                    onFileRemoved={(id) => {
+                        removeFile(id);
+                        setNotice("");
+                        setSubmissionError(null);
                     }}
                 />
-            </div>
+            </fieldset>
             <p
                 role="status"
                 aria-live="polite"
@@ -129,9 +206,10 @@ export default function CreateProjectForm() {
                 </Link>
                 <button
                     type="submit"
-                    className="min-h-[46px] rounded-[9px] bg-primary px-3 text-[15px] font-medium text-on-primary hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    disabled={pending || !name.trim() || !ready}
+                    className="min-h-[46px] rounded-[9px] bg-primary px-3 text-[15px] font-medium text-on-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 >
-                    Create Project
+                    {pending ? "Creating project…" : "Create Project"}
                 </button>
             </footer>
         </form>
