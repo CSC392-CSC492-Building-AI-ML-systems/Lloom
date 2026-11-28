@@ -11,7 +11,8 @@ from app.db import (
     initialize_database,
     transaction,
 )
-from app.jobs import JobManager, cancel_job, now
+from app.jobs import JobManager, cancel_job, job_response, now
+
 # lloom_api/lloom.db, independent of the current directory
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "lloom.db"
 
@@ -25,18 +26,6 @@ def get_models() -> dict:
     raise NotImplementedError("Model settings are not set up yet (B4)")
 
 
-# The job shape the frontend reads. error is only set for a Failed job.
-def job_response(job) -> dict:
-    return {
-        "id": job["id"],
-        "status": job["status"],
-        "step": job["step"],
-        "done": job["done"],
-        "total": job["total"],
-        "error": job["error"],
-    }
-
-
 # get_models is a parameter so tests (and later B7) can hand in fake models
 def create_app(get_models: Callable[[], dict] = get_models) -> FastAPI:
     app = FastAPI(title="LLooM API")
@@ -45,6 +34,11 @@ def create_app(get_models: Callable[[], dict] = get_models) -> FastAPI:
     from app.projects import router as projects_router
 
     app.include_router(projects_router)
+
+    # Draft run routes
+    from app.runs import router as runs_router
+
+    app.include_router(runs_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=FRONTEND_ORIGINS,
@@ -55,6 +49,9 @@ def create_app(get_models: Callable[[], dict] = get_models) -> FastAPI:
     app.state.db_path = os.environ.get("LLOOM_DB_PATH", str(DEFAULT_DB_PATH))
     # On app.state so routes can reach it later (B7 calls submit)
     app.state.job_manager = JobManager(app.state.db_path, get_models)
+    
+    # Routes that build a session (B5 draft runs) get their models from here
+    app.state.get_models = get_models
 
     @app.on_event("startup")
     def create_database():

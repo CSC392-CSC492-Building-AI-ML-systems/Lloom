@@ -588,3 +588,33 @@ def fail_interrupted_jobs(connection: sqlite3.Connection, *, updated_at: str) ->
         """,
         (updated_at,),
     )
+
+
+# Replaces everything a Draft was built from (PATCH /runs/{id})
+def update_run_draft(connection: sqlite3.Connection,*,run_id: str,dataset_id: str,name: str,config: dict[str, Any],params: dict[str, Any],
+                     generation_estimate: dict[str, Any] | None,score_estimate: dict[str, Any] | None,session_pickle: bytes | None,updated_at: str,) -> None:
+    connection.execute(
+        """
+        UPDATE runs
+        SET dataset_id = ?,
+            name = ?,
+            config_json = ?,
+            params_json = ?,
+            generation_estimate_json = ?,
+            score_estimate_json = ?,
+            session_pickle = ?,
+            updated_at = ?
+        WHERE id = ?
+        """,
+        (
+            dataset_id,
+            name,
+            json.dumps(config),
+            json.dumps(params),
+            json.dumps(generation_estimate) if generation_estimate is not None else None,
+            json.dumps(score_estimate) if score_estimate is not None else None,
+            session_pickle,
+            updated_at,
+            run_id,
+        ),
+    )

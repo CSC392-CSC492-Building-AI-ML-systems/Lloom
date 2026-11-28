@@ -27,6 +27,7 @@ from app.db import (
     transaction,
     update_project_last_opened,
 )
+from app.runs import run_costs
 
 
 
@@ -147,6 +148,7 @@ def serialize_run(row: sqlite3.Row) -> dict[str, Any]:
         "datasetId": row["dataset_id"],
         "created": row["created_at"],
         "status": row["status"],
+        **run_costs(row),
     }
     if row["status"] == "Draft":
         run_response["configuration"] = json.loads(row["config_json"])

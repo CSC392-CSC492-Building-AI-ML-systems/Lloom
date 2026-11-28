@@ -300,7 +300,8 @@ class lloom:
             n_batches = math.ceil(len(df_to_score) / batch_size)
 
             all_doc_tokens = np.sum([model.count_tokens_fn(model, doc) for doc in df_to_score[self.doc_col].tolist()])  # Tokens to encode all documents
-            score_in_tokens = all_doc_tokens + (n_batches * (score_prompt_tokens + est_concept_tokens))
+            # Every document and the prompt are sent once per concept
+            score_in_tokens = n_concepts * (all_doc_tokens + (n_batches * (score_prompt_tokens + est_concept_tokens)))
             score_out_tokens = est_score_json_tokens * n_concepts * len(df_to_score)
             est_cost = model.cost_fn(model, (score_in_tokens, score_out_tokens))
 
