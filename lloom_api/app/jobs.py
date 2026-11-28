@@ -45,6 +45,18 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# The job shape the frontend reads. error is only set for a Failed job.
+def job_response(job) -> dict:
+    return {
+        "id": job["id"],
+        "status": job["status"],
+        "step": job["step"],
+        "done": job["done"],
+        "total": job["total"],
+        "error": job["error"],
+    }
+
+
 # The session helpers take a connection (not a path), so they work inside any
 # transaction: a worker's, or a route's.
 

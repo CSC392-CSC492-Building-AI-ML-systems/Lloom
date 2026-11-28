@@ -79,3 +79,17 @@ def test_score_estimate_with_no_price_does_not_crash(session, make_unpriced):
     make_unpriced(session)
     est = session.estimate_score_cost(n_concepts=2, df_to_score=session.in_df)
     assert est == {"steps": {}, "total": 0, "available": False}
+
+
+def test_score_estimate_input_grows_with_concepts(session):
+    # Every document is sent once per concept, with the prompt each time
+    one = session.estimate_score_cost(n_concepts=1, df_to_score=session.in_df)
+    three = session.estimate_score_cost(n_concepts=3, df_to_score=session.in_df)
+    assert math.isclose(three["steps"]["score"][0], 3 * one["steps"]["score"][0])
+
+
+def test_score_estimate_smaller_batches_cost_more_input(session):
+    # More batches means the prompt is sent more times
+    batched = session.estimate_score_cost(n_concepts=2, batch_size=5, df_to_score=session.in_df)
+    single = session.estimate_score_cost(n_concepts=2, batch_size=1, df_to_score=session.in_df)
+    assert single["steps"]["score"][0] > batched["steps"]["score"][0]
