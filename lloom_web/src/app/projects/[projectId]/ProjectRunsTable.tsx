@@ -1,5 +1,19 @@
 import Link from "next/link";
-import type { ProjectFixture } from "@/fixtures/projects";
+export type WorkspaceRun = {
+    id: string;
+    name: string;
+    datasetId: string;
+    created: string;
+    status: "Draft" | "Pending" | "Running" | "Completed" | "Failed" | "Cancelled";
+    concepts?: number;
+    temporary?: boolean;
+};
+type RunsProject = {
+    id: string;
+    name: string;
+    datasets: { id: string; name: string }[];
+    runs: WorkspaceRun[];
+};
 
 const actionClass =
     "inline-flex min-h-11 items-center rounded text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
@@ -10,11 +24,19 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
     timeZone: "UTC",
 });
 
-export default function ProjectRunsTable({ project }: { project: ProjectFixture }) {
+export default function ProjectRunsTable({
+    project,
+    demo = false,
+}: {
+    project: RunsProject;
+    demo?: boolean;
+}) {
     if (!project.runs.length)
         return (
             <p className="mt-4 text-[15px] text-content-secondary">
-                No runs yet. Choose New Run to configure your first analysis.
+                {demo
+                    ? "No runs yet. Choose New Run to configure your first analysis."
+                    : "No runs yet. Run creation is not connected yet."}
             </p>
         );
     return (
@@ -25,7 +47,9 @@ export default function ProjectRunsTable({ project }: { project: ProjectFixture 
             className="mt-4 overflow-x-auto rounded-md focus-visible:outline-2 focus-visible:outline-primary"
         >
             <table className="w-full min-w-[760px] text-left text-[13px]">
-                <caption className="sr-only">Fixture analysis runs for {project.name}</caption>
+                <caption className="sr-only">
+                    {demo ? "Fixture analysis runs" : "Analysis runs"} for {project.name}
+                </caption>
                 <thead className="bg-surface-subtle text-[11px] text-content-secondary">
                     <tr>
                         {["Run", "Dataset", "Status", "Concepts", "Created", "Action"].map(
@@ -72,7 +96,11 @@ export default function ProjectRunsTable({ project }: { project: ProjectFixture 
                                     </time>
                                 </td>
                                 <td className="px-3 py-4 whitespace-nowrap">
-                                    {run.temporary && run.status !== "Completed" ? (
+                                    {!demo ? (
+                                        <span className="text-content-secondary">
+                                            Not connected yet
+                                        </span>
+                                    ) : run.temporary && run.status !== "Completed" ? (
                                         <Link
                                             aria-label={`View progress for ${run.name}`}
                                             href={`/projects/${project.id}/runs/${encodeURIComponent(run.id)}/progress`}

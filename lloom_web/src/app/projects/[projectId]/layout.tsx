@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import { notFound } from "next/navigation";
-import { getProjectFixture } from "@/fixtures/projects";
+import { getDemoProject } from "./project-data";
 import ProjectRunProvider from "./ProjectRunProvider";
 
 export default async function ProjectLayout({
@@ -11,8 +10,8 @@ export default async function ProjectLayout({
     params: Promise<{ projectId: string }>;
 }) {
     const { projectId } = await params;
-    const project = getProjectFixture(projectId);
-    if (!project) notFound();
+    const project = getDemoProject(projectId);
+    if (!project) return children;
     return (
         <ProjectRunProvider key={projectId} project={project}>
             {children}
