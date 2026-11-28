@@ -1,10 +1,20 @@
 # LLooM Web
 
+Home now retrieves recent projects from FastAPI. The remaining screens retain their fixture-based behavior described below.
+
+Copy `.env.example` to `.env.local` in this directory. `LLOOM_API_BASE_URL` defaults to `http://localhost:8000`; restart Next.js after changing it. The example is versioned and local overrides are ignored. Start FastAPI separately using `../lloom_api/README.md`.
+
+The server-only client in `src/lib/api/` uses native fetch with a 10-second timeout (overridable per request with `timeoutMs`) and supports caller cancellation signals. Endpoint functions validate their actual response contracts independently of fixture types. HTTP errors, FastAPI string/validation details, invalid responses, timeouts, and connection failures are handled without falling back to fixtures.
+
+Home streams the recent list with loading, empty, and error states. Retry performs a full GET navigation. Project requests use `cache: "no-store"`; reload or revisit Home to fetch changes. There is no polling. Browser history restoration and development HMR can reuse existing UI/data; use a full reload when checking backend changes.
+
+Backend project rows are temporarily non-interactive: workspace routes still validate fixture IDs rather than UUIDs. Workspace integration will restore navigation. Use the direct fixture URLs below for the existing simulated workflow. Creation, uploads, runs, results, and settings are not connected by this integration.
+
 ## 1. Overview
 
 LLooM Web is the Next.js 16 / React 19 frontend for Language Model-based Concept Induction: discovering and inspecting concepts in text collections. It demonstrates project workspaces, run configuration/review, simulated execution, Concept Explorer, Concept Details, and Document Details.
 
-**This is an illustrative frontend demo.** No actual datasets are loaded or stored. `src/fixtures/projects.ts` defines fictional dataset metadata and sample rows; `src/fixtures/run-results.fixtures.ts` generates illustrative documents, concepts, scores, evidence, and rationales. Those results are not derived from the sample rows or a connected LLooM backend.
+**Outside Home, this is an illustrative frontend demo.** No actual datasets are loaded or stored by these screens. `src/fixtures/projects.ts` defines fictional dataset metadata and sample rows; `src/fixtures/run-results.fixtures.ts` generates illustrative documents, concepts, scores, evidence, and rationales. Those results are not derived from the sample rows or a connected LLooM backend.
 
 ## 2. Getting Started
 
@@ -115,7 +125,7 @@ Runs started from Review receive temporary `sim-*` URLs. Obtain those by startin
 
 ### Full workflow: simulated execution
 
-1. Start at Landing and open Customer Feedback Analysis.
+1. Open the fixture workspace directly at http://localhost:3000/projects/1.
 2. Resume Run 3 — New experiment, or choose Configure New Run for defaults. Draft edits are temporary.
 3. Inspect the data configuration and concept-generation settings, then proceed to Review Run. Review the illustrative total estimated cost. Return to Configure and edit a setting to demonstrate an unavailable estimate.
 4. Click Start Run. Inspect the configuration summary and simulated distillation, clustering/synthesis, review, and scoring stages.
